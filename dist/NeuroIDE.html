@@ -1,0 +1,2226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuroIDE — an IDE with a from-scratch neural network inside</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+<style>
+/* NeuroIDE — dark IDE theme, no external fonts or assets. */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0d1117;
+  --bg2: #161b22;
+  --bg3: #1c2230;
+  --border: #262d38;
+  --fg: #d6dde5;
+  --dim: #8b949e;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --red: #f85149;
+  --yellow: #d29922;
+  --purple: #bc8cff;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------- top bar */
+#topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.brand { font-size: 15px; }
+.brand .tagline { color: var(--dim); font-size: 12px; margin-left: 10px; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+.chip {
+  font-size: 11px;
+  color: var(--dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.chip.on { color: var(--green); border-color: rgba(63,185,80,.5); }
+
+.btn {
+  background: var(--bg3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--dim); }
+.btn.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+.btn.primary:hover { background: #2a7aff; }
+.btn.primary.active { background: var(--bg3); border-color: var(--yellow); color: var(--yellow); }
+.btn.subtle { color: var(--dim); }
+.btn.wide { flex: 1; }
+.btn:disabled { opacity: .5; cursor: default; }
+
+.icon-btn {
+  background: none; border: none; color: var(--dim);
+  font-size: 13px; cursor: pointer; padding: 0 4px;
+}
+.icon-btn:hover { color: var(--fg); }
+
+/* ------------------------------------------------------------- layout */
+#app {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr) 300px;
+  min-height: 0;
+}
+@media (max-width: 900px) {
+  #app { grid-template-columns: 150px minmax(0, 1fr) 260px; }
+  .brand .tagline { display: none; }
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  font-size: 10.5px;
+  letter-spacing: .12em;
+  color: var(--dim);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------------ sidebar */
+#sidebar {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#file-list { flex: 1 1 auto; overflow-y: auto; padding: 4px 0; }
+.file {
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--dim);
+}
+.file:hover { background: var(--bg3); color: var(--fg); }
+.file.active { background: var(--bg3); color: var(--fg); box-shadow: inset 2px 0 0 var(--accent); }
+.fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge {
+  font-family: var(--mono); font-size: 8.5px; font-weight: 700;
+  border-radius: 3px; padding: 1.5px 3px; flex: 0 0 auto;
+  background: #30363d; color: #9aa4af;
+}
+.badge-js { background: rgba(210,153,34,.22); color: #e3b341; }
+.badge-lua { background: rgba(88,166,255,.2); color: var(--accent); }
+.badge-md { background: rgba(188,140,255,.2); color: var(--purple); }
+.badge-json { background: rgba(63,185,80,.2); color: var(--green); }
+.file-new-input {
+  width: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  outline: none;
+}
+.file-act { visibility: hidden; color: var(--dim); padding: 0 2px; }
+.file:hover .file-act { visibility: visible; }
+.file-act:hover { color: var(--red); }
+.sidebar-note {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  color: var(--dim);
+  font-size: 11px;
+  border-top: 1px solid var(--border);
+  line-height: 1.45;
+}
+.sidebar-note code { font-family: var(--mono); font-size: 10px; color: var(--accent); }
+
+/* ------------------------------------------------------------- center */
+#center { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+#tabs {
+  display: flex;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex: 0 0 auto;
+  scrollbar-width: none;
+}
+.tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 12px;
+  font-size: 12px;
+  color: var(--dim);
+  cursor: pointer;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tab.active { background: var(--bg); color: var(--fg); box-shadow: inset 0 2px 0 var(--accent); }
+.tab-close { color: var(--dim); padding: 0 2px; border-radius: 3px; }
+.tab-close:hover { color: var(--fg); background: var(--bg3); }
+
+#editor-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+  background: var(--bg);
+}
+#gutter-col {
+  flex: 0 0 44px;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+  position: relative;
+}
+#gutter {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #4b5563;
+  text-align: right;
+  padding: 10px 8px 10px 0;
+  white-space: pre;
+  will-change: transform;
+}
+#editor-stack { position: relative; flex: 1 1 auto; min-width: 0; }
+#hl-pre, #ed {
+  position: absolute;
+  inset: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}
+#hl-pre { pointer-events: none; overflow: hidden; margin: 0; }
+#hl { display: block; }
+#ed {
+  background: transparent;
+  color: transparent;
+  caret-color: var(--fg);
+  border: none;
+  outline: none;
+  resize: none;
+}
+#ed::selection { background: rgba(88, 166, 255, .28); color: transparent; }
+
+/* syntax colors */
+.tk-cmt { color: #7d8590; font-style: italic; }
+.tk-str { color: #a5d6ff; }
+.tk-num { color: #f2cc60; }
+.tk-kw { color: #ff7b72; }
+.tk-lit { color: #79c0ff; }
+.tk-fn { color: #d2a8ff; }
+.tk-key { color: #7ee787; }
+.tk-head { color: var(--accent); font-weight: 700; }
+
+/* ------------------------------------------------------------ console */
+#console-panel {
+  flex: 0 0 160px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+  min-height: 0;
+}
+#console-out {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  line-height: 1.5;
+}
+.entry { white-space: pre-wrap; word-break: break-word; }
+.entry-log { color: var(--fg); }
+.entry-warn { color: var(--yellow); }
+.entry-error { color: var(--red); }
+.entry-sys { color: var(--dim); font-style: italic; }
+
+/* ----------------------------------------------------------- AI panel */
+#ai-panel {
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+.ai-section {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sec-title { font-size: 10.5px; letter-spacing: .12em; color: var(--dim); }
+.row { display: flex; align-items: center; gap: 8px; }
+.lbl { flex: 0 0 46px; color: var(--dim); font-size: 11px; }
+.row select, .row input[type="range"] { flex: 1 1 auto; min-width: 0; }
+select, input[type="text"] {
+  background: var(--bg3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  outline: none;
+}
+input[type="text"]:focus, select:focus { border-color: var(--accent); }
+input[type="range"] { accent-color: var(--accent); }
+.slider-v { flex: 0 0 30px; text-align: right; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.arch-line { color: var(--dim); font-size: 11px; font-family: var(--mono); }
+.btn-row { display: flex; gap: 6px; }
+
+.stats { display: flex; gap: 6px; }
+.stats > div {
+  flex: 1;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.stat-l { font-size: 9.5px; letter-spacing: .08em; color: var(--dim); text-transform: uppercase; }
+.stat-v { font-family: var(--mono); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+#loss-chart {
+  width: 100%;
+  height: 72px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.gen-out {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  min-height: 90px;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg);
+}
+.gen-out.busy { border-color: var(--accent); }
+
+/* --------------------------------------------------------- status bar */
+#statusbar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 4px 14px;
+  background: #10151d;
+  border-top: 1px solid var(--border);
+  color: var(--dim);
+  font-size: 11.5px;
+  font-family: var(--mono);
+}
+#statusbar .right { margin-left: auto; }
+.flash { color: var(--green); opacity: 0; transition: opacity .2s; }
+.flash.show { opacity: 1; }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2c333d; border-radius: 5px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-track { background: transparent; }
+
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">🧠 <strong>NeuroIDE</strong><span class="tagline">a real neural net, trained in your tab — no APIs</span></div>
+  <div class="topbar-actions">
+    <span id="chip-model" class="chip">model: untrained</span>
+    <button id="btn-run" class="btn primary" title="Run active .js file (Ctrl+Enter)">▶ Run</button>
+    <button id="btn-reset-ws" class="btn subtle" title="Restore default files">Reset workspace</button>
+  </div>
+</header>
+
+<div id="app">
+  <aside id="sidebar">
+    <div class="panel-head">
+      <span>EXPLORER</span>
+      <button id="btn-new-file" class="icon-btn" title="New file">＋</button>
+    </div>
+    <div id="file-list"></div>
+    <div class="sidebar-note">Files live in your browser (localStorage). Double-click to rename.</div>
+  </aside>
+
+  <main id="center">
+    <div id="tabs"></div>
+    <div id="editor-wrap">
+      <div id="gutter-col"><div id="gutter"></div></div>
+      <div id="editor-stack">
+        <pre id="hl-pre" aria-hidden="true"><code id="hl"></code></pre>
+        <textarea id="ed" spellcheck="false" wrap="off" autocomplete="off" autocapitalize="off"></textarea>
+      </div>
+    </div>
+    <div id="console-panel">
+      <div class="panel-head">
+        <span>CONSOLE</span>
+        <button id="btn-clear-console" class="icon-btn" title="Clear console">✕</button>
+      </div>
+      <div id="console-out"></div>
+    </div>
+  </main>
+
+  <aside id="ai-panel">
+    <div class="panel-head"><span>NEURAL NETWORK</span></div>
+
+    <section class="ai-section">
+      <label class="row">
+        <span class="lbl">size</span>
+        <select id="ai-preset">
+          <option value="nano" selected>nano · ~28k params (fast)</option>
+          <option value="small">small · ~64k params</option>
+          <option value="medium">medium · ~183k params (slow)</option>
+        </select>
+      </label>
+      <label class="row">
+        <span class="lbl">corpus</span>
+        <select id="ai-corpus">
+          <option value="train-file" selected>train-data.txt</option>
+          <option value="all">all project files</option>
+          <option value="active">active file</option>
+        </select>
+      </label>
+      <div id="ai-arch" class="arch-line"></div>
+      <div class="btn-row">
+        <button id="btn-train" class="btn primary wide">▶ Start training</button>
+        <button id="btn-reset-model" class="btn subtle" title="Discard weights and start over">Reset</button>
+      </div>
+      <div class="stats">
+        <div><span class="stat-l">steps</span><span id="ai-steps" class="stat-v">0</span></div>
+        <div><span class="stat-l">loss</span><span id="ai-loss" class="stat-v">–</span></div>
+        <div><span class="stat-l">speed</span><span id="ai-speed" class="stat-v">–</span></div>
+      </div>
+      <canvas id="loss-chart"></canvas>
+    </section>
+
+    <section class="ai-section">
+      <div class="sec-title">GENERATE</div>
+      <input id="gen-prompt" type="text" placeholder="prompt, e.g.  function " value="function ">
+      <label class="row"><span class="lbl">temp</span>
+        <input id="gen-temp" type="range" min="10" max="150" value="60"><span id="gen-temp-v" class="slider-v"></span></label>
+      <label class="row"><span class="lbl">top-k</span>
+        <input id="gen-topk" type="range" min="0" max="40" value="12"><span id="gen-topk-v" class="slider-v"></span></label>
+      <label class="row"><span class="lbl">length</span>
+        <input id="gen-len" type="range" min="40" max="600" step="20" value="200"><span id="gen-len-v" class="slider-v"></span></label>
+      <div class="btn-row">
+        <button id="btn-generate" class="btn primary wide">✨ Generate</button>
+        <button id="btn-insert" class="btn subtle" title="Insert output at cursor">Insert</button>
+      </div>
+      <pre id="gen-out" class="gen-out">…the model's writing appears here</pre>
+    </section>
+
+    <section class="ai-section">
+      <div class="sec-title">TOOLS</div>
+      <div class="btn-row">
+        <button id="btn-complete" class="btn subtle wide" title="Ctrl+Space in the editor">⌨ Complete at cursor</button>
+      </div>
+      <div class="btn-row">
+        <button id="btn-save-model" class="btn subtle wide">💾 Save model</button>
+        <button id="btn-load-model" class="btn subtle wide">📂 Load model</button>
+      </div>
+      <input id="model-file" type="file" accept=".json" style="display:none">
+      <div class="sidebar-note">The whole model — tensors, autograd, attention, Adam — is in <code>js/nn.js</code>. Read it, it's short.</div>
+    </section>
+  </aside>
+</div>
+
+<footer id="statusbar">
+  <span id="st-pos">Ln 1, Col 1</span>
+  <span id="st-lang">–</span>
+  <span id="st-flash" class="flash"></span>
+  <span id="st-model" class="right">no model</span>
+</footer>
+
+<script>
+/*
+ * nn.js — a tiny neural-network engine + GPT-style language model, from scratch.
+ *
+ * No dependencies, no APIs, no ML libraries. Pure JavaScript.
+ * Works in the browser (window.NN) and in Node (module.exports).
+ *
+ * What's inside:
+ *   - Tensor: 2-D tensors (Float64Array) with reverse-mode autodiff
+ *   - Ops: matmul, add, bias-add, slice, GELU, LayerNorm, embedding lookup,
+ *          fused causal multi-head self-attention, softmax cross-entropy
+ *   - Adam optimizer (decoupled weight decay)
+ *   - CharTokenizer: character-level tokenizer
+ *   - CharLM: a miniature GPT (token+positional embeddings, N transformer
+ *             blocks with causal self-attention, LayerNorm, MLP, LM head)
+ *   - Trainer: mini-batch training loop over a text corpus
+ *   - sample(): autoregressive text generation (temperature + top-k)
+ */
+(function (global, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else global.NN = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  // ---------------------------------------------------------------- RNG ----
+  // Deterministic xorshift32 so runs are reproducible.
+  let _seed = 1337 >>> 0;
+
+  function seed(s) { _seed = (s >>> 0) || 1; }
+
+  function rand() {
+    _seed ^= _seed << 13; _seed >>>= 0;
+    _seed ^= _seed >>> 17;
+    _seed ^= _seed << 5; _seed >>>= 0;
+    return _seed / 4294967296;
+  }
+
+  function randn() { // Box-Muller
+    let u = 0, v = 0;
+    while (u === 0) u = rand();
+    while (v === 0) v = rand();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function randInt(n) { return Math.floor(rand() * n); }
+
+  // ------------------------------------------------------------- Tensor ----
+  class Tensor {
+    constructor(rows, cols, data) {
+      this.rows = rows;
+      this.cols = cols;
+      this.data = data || new Float64Array(rows * cols);
+      this.grad = null;          // lazily allocated in backward
+      this._prev = null;         // parent tensors in the graph
+      this._backward = null;     // closure that propagates this.grad to parents
+      this.requiresGrad = false; // true for trainable parameters
+      this.name = null;
+    }
+
+    static zeros(rows, cols) { return new Tensor(rows, cols); }
+
+    static randn(rows, cols, scale) {
+      const t = new Tensor(rows, cols);
+      const s = scale === undefined ? 1 : scale;
+      for (let i = 0; i < t.data.length; i++) t.data[i] = randn() * s;
+      return t;
+    }
+
+    static full(rows, cols, v) {
+      const t = new Tensor(rows, cols);
+      t.data.fill(v);
+      return t;
+    }
+
+    get size() { return this.rows * this.cols; }
+
+    ensureGrad() {
+      if (!this.grad) this.grad = new Float64Array(this.size);
+      return this.grad;
+    }
+
+    zeroGrad() { if (this.grad) this.grad.fill(0); }
+
+    // Reverse-mode autodiff: topological sort, then walk backwards.
+    backward() {
+      const topo = [];
+      const visited = new Set();
+      (function build(t) {
+        if (visited.has(t)) return;
+        visited.add(t);
+        if (t._prev) for (const p of t._prev) build(p);
+        topo.push(t);
+      })(this);
+      this.ensureGrad().fill(0);
+      this.grad[0] = 1;
+      for (let i = topo.length - 1; i >= 0; i--) {
+        if (topo[i]._backward) topo[i]._backward();
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------- Ops ----
+
+  // C = A @ B     A:[m,k]  B:[k,n]  ->  [m,n]
+  function matmul(a, b) {
+    const m = a.rows, k = a.cols, n = b.cols;
+    if (b.rows !== k) throw new Error('matmul shape mismatch');
+    const out = new Tensor(m, n);
+    const A = a.data, B = b.data, C = out.data;
+    for (let i = 0; i < m; i++) {
+      const ai = i * k, ci = i * n;
+      for (let p = 0; p < k; p++) {
+        const av = A[ai + p];
+        if (av === 0) continue;
+        const bp = p * n;
+        for (let j = 0; j < n; j++) C[ci + j] += av * B[bp + j];
+      }
+    }
+    out._prev = [a, b];
+    out._backward = function () {
+      const dC = out.grad;
+      const dA = a.ensureGrad(), dB = b.ensureGrad();
+      // dA = dC @ B^T
+      for (let i = 0; i < m; i++) {
+        const ci = i * n, ai = i * k;
+        for (let p = 0; p < k; p++) {
+          let s = 0;
+          const bp = p * n;
+          for (let j = 0; j < n; j++) s += dC[ci + j] * B[bp + j];
+          dA[ai + p] += s;
+        }
+      }
+      // dB = A^T @ dC
+      for (let i = 0; i < m; i++) {
+        const ai = i * k, ci = i * n;
+        for (let p = 0; p < k; p++) {
+          const av = A[ai + p];
+          if (av === 0) continue;
+          const bp = p * n;
+          for (let j = 0; j < n; j++) dB[bp + j] += av * dC[ci + j];
+        }
+      }
+    };
+    return out;
+  }
+
+  // Elementwise add, same shape.
+  function add(a, b) {
+    if (a.rows !== b.rows || a.cols !== b.cols) throw new Error('add shape mismatch');
+    const out = new Tensor(a.rows, a.cols);
+    const A = a.data, B = b.data, C = out.data;
+    for (let i = 0; i < C.length; i++) C[i] = A[i] + B[i];
+    out._prev = [a, b];
+    out._backward = function () {
+      const dC = out.grad;
+      const dA = a.ensureGrad(), dB = b.ensureGrad();
+      for (let i = 0; i < dC.length; i++) { dA[i] += dC[i]; dB[i] += dC[i]; }
+    };
+    return out;
+  }
+
+  // Add a [1,n] bias row to every row of a [m,n] tensor.
+  function addBias(a, b) {
+    if (b.rows !== 1 || b.cols !== a.cols) throw new Error('addBias shape mismatch');
+    const m = a.rows, n = a.cols;
+    const out = new Tensor(m, n);
+    const A = a.data, B = b.data, C = out.data;
+    for (let i = 0; i < m; i++) {
+      const o = i * n;
+      for (let j = 0; j < n; j++) C[o + j] = A[o + j] + B[j];
+    }
+    out._prev = [a, b];
+    out._backward = function () {
+      const dC = out.grad;
+      const dA = a.ensureGrad(), dB = b.ensureGrad();
+      for (let i = 0; i < m; i++) {
+        const o = i * n;
+        for (let j = 0; j < n; j++) { dA[o + j] += dC[o + j]; dB[j] += dC[o + j]; }
+      }
+    };
+    return out;
+  }
+
+  // Column slice: out[i,j] = x[i, start+j]   (used to split fused QKV)
+  function slice(x, start, width) {
+    const m = x.rows, n = x.cols;
+    const out = new Tensor(m, width);
+    const X = x.data, C = out.data;
+    for (let i = 0; i < m; i++) {
+      const xi = i * n + start, ci = i * width;
+      for (let j = 0; j < width; j++) C[ci + j] = X[xi + j];
+    }
+    out._prev = [x];
+    out._backward = function () {
+      const dC = out.grad;
+      const dX = x.ensureGrad();
+      for (let i = 0; i < m; i++) {
+        const xi = i * n + start, ci = i * width;
+        for (let j = 0; j < width; j++) dX[xi + j] += dC[ci + j];
+      }
+    };
+    return out;
+  }
+
+  // GELU (tanh approximation), the GPT-2 activation.
+  const GELU_C = Math.sqrt(2 / Math.PI);
+  function gelu(x) {
+    const out = new Tensor(x.rows, x.cols);
+    const X = x.data, Y = out.data;
+    for (let i = 0; i < X.length; i++) {
+      const v = X[i];
+      Y[i] = 0.5 * v * (1 + Math.tanh(GELU_C * (v + 0.044715 * v * v * v)));
+    }
+    out._prev = [x];
+    out._backward = function () {
+      const dY = out.grad;
+      const dX = x.ensureGrad();
+      for (let i = 0; i < X.length; i++) {
+        const v = X[i];
+        const u = GELU_C * (v + 0.044715 * v * v * v);
+        const t = Math.tanh(u);
+        const du = GELU_C * (1 + 3 * 0.044715 * v * v);
+        dX[i] += dY[i] * (0.5 * (1 + t) + 0.5 * v * (1 - t * t) * du);
+      }
+    };
+    return out;
+  }
+
+  // Row-wise LayerNorm with learnable gain g and bias b (both [1,n]).
+  function layerNorm(x, g, b) {
+    const m = x.rows, n = x.cols;
+    const out = new Tensor(m, n);
+    const X = x.data, G = g.data, B = b.data, Y = out.data;
+    const xhat = new Float64Array(m * n);
+    const istd = new Float64Array(m);
+    const EPS = 1e-5;
+    for (let i = 0; i < m; i++) {
+      const o = i * n;
+      let mean = 0;
+      for (let j = 0; j < n; j++) mean += X[o + j];
+      mean /= n;
+      let vsum = 0;
+      for (let j = 0; j < n; j++) { const d = X[o + j] - mean; vsum += d * d; }
+      const inv = 1 / Math.sqrt(vsum / n + EPS);
+      istd[i] = inv;
+      for (let j = 0; j < n; j++) {
+        const h = (X[o + j] - mean) * inv;
+        xhat[o + j] = h;
+        Y[o + j] = G[j] * h + B[j];
+      }
+    }
+    out._prev = [x, g, b];
+    out._backward = function () {
+      const dY = out.grad;
+      const dX = x.ensureGrad(), dG = g.ensureGrad(), dB = b.ensureGrad();
+      for (let i = 0; i < m; i++) {
+        const o = i * n;
+        let sum1 = 0, sum2 = 0;
+        for (let j = 0; j < n; j++) {
+          const dxh = dY[o + j] * G[j];
+          sum1 += dxh;
+          sum2 += dxh * xhat[o + j];
+          dG[j] += dY[o + j] * xhat[o + j];
+          dB[j] += dY[o + j];
+        }
+        const inv = istd[i];
+        for (let j = 0; j < n; j++) {
+          const dxh = dY[o + j] * G[j];
+          dX[o + j] += inv * (dxh - sum1 / n - xhat[o + j] * sum2 / n);
+        }
+      }
+    };
+    return out;
+  }
+
+  // Embedding lookup: gather rows of `table` [V,C] by integer indices -> [N,C]
+  function embedding(table, idx) {
+    const N = idx.length, C = table.cols;
+    const out = new Tensor(N, C);
+    const T = table.data, Y = out.data;
+    for (let i = 0; i < N; i++) {
+      const t = idx[i] * C, o = i * C;
+      for (let j = 0; j < C; j++) Y[o + j] = T[t + j];
+    }
+    out._prev = [table];
+    out._backward = function () {
+      const dY = out.grad;
+      const dT = table.ensureGrad();
+      for (let i = 0; i < N; i++) {
+        const t = idx[i] * C, o = i * C;
+        for (let j = 0; j < C; j++) dT[t + j] += dY[o + j];
+      }
+    };
+    return out;
+  }
+
+  // Fused causal multi-head self-attention.
+  // q,k,v: [B*T, C], nHead divides C. Returns [B*T, C].
+  // For each batch b and head h:  out = softmax(mask(Q K^T / sqrt(hs))) V
+  function causalSelfAttention(q, k, v, B, T, nHead) {
+    const C = q.cols;
+    const hs = C / nHead;
+    if (hs !== Math.floor(hs)) throw new Error('nHead must divide nEmbd');
+    const scale = 1 / Math.sqrt(hs);
+    const out = new Tensor(q.rows, C);
+    const Q = q.data, K = k.data, V = v.data, Y = out.data;
+    // Cache attention probabilities for the backward pass.
+    const P = new Float64Array(B * nHead * T * T);
+
+    for (let b = 0; b < B; b++) {
+      for (let h = 0; h < nHead; h++) {
+        const hoff = h * hs;
+        const pbase = (b * nHead + h) * T * T;
+        for (let i = 0; i < T; i++) {
+          const qi = (b * T + i) * C + hoff;
+          const prow = pbase + i * T;
+          // scores for j <= i, with running max for stable softmax
+          let maxs = -Infinity;
+          for (let j = 0; j <= i; j++) {
+            const kj = (b * T + j) * C + hoff;
+            let s = 0;
+            for (let d = 0; d < hs; d++) s += Q[qi + d] * K[kj + d];
+            s *= scale;
+            P[prow + j] = s;
+            if (s > maxs) maxs = s;
+          }
+          let denom = 0;
+          for (let j = 0; j <= i; j++) {
+            const e = Math.exp(P[prow + j] - maxs);
+            P[prow + j] = e;
+            denom += e;
+          }
+          const oi = (b * T + i) * C + hoff;
+          for (let d = 0; d < hs; d++) Y[oi + d] = 0;
+          for (let j = 0; j <= i; j++) {
+            const p = P[prow + j] / denom;
+            P[prow + j] = p;
+            const vj = (b * T + j) * C + hoff;
+            for (let d = 0; d < hs; d++) Y[oi + d] += p * V[vj + d];
+          }
+        }
+      }
+    }
+
+    out._prev = [q, k, v];
+    out._backward = function () {
+      const dY = out.grad;
+      const dQ = q.ensureGrad(), dK = k.ensureGrad(), dV = v.ensureGrad();
+      for (let b = 0; b < B; b++) {
+        for (let h = 0; h < nHead; h++) {
+          const hoff = h * hs;
+          const pbase = (b * nHead + h) * T * T;
+          for (let i = 0; i < T; i++) {
+            const prow = pbase + i * T;
+            const oi = (b * T + i) * C + hoff;
+            const qi = oi;
+            // dP_ij = dY_i . V_j ;  dV_j += P_ij * dY_i
+            // softmax backward: dS_ij = P_ij * (dP_ij - sum_k P_ik dP_ik)
+            let dot = 0;
+            const dP = new Float64Array(i + 1);
+            for (let j = 0; j <= i; j++) {
+              const vj = (b * T + j) * C + hoff;
+              let s = 0;
+              for (let d = 0; d < hs; d++) {
+                s += dY[oi + d] * V[vj + d];
+                dV[vj + d] += P[prow + j] * dY[oi + d];
+              }
+              dP[j] = s;
+              dot += P[prow + j] * s;
+            }
+            for (let j = 0; j <= i; j++) {
+              const dS = P[prow + j] * (dP[j] - dot) * scale;
+              const kj = (b * T + j) * C + hoff;
+              for (let d = 0; d < hs; d++) {
+                dQ[qi + d] += dS * K[kj + d];
+                dK[kj + d] += dS * Q[qi + d];
+              }
+            }
+          }
+        }
+      }
+    };
+    return out;
+  }
+
+  // Softmax + mean cross-entropy, fused. logits:[N,V], targets: int array [N].
+  // Returns a 1x1 loss tensor.
+  function softmaxCrossEntropy(logits, targets) {
+    const N = logits.rows, V = logits.cols;
+    const L = logits.data;
+    const probs = new Float64Array(N * V);
+    let loss = 0;
+    for (let i = 0; i < N; i++) {
+      const o = i * V;
+      let maxv = -Infinity;
+      for (let j = 0; j < V; j++) if (L[o + j] > maxv) maxv = L[o + j];
+      let denom = 0;
+      for (let j = 0; j < V; j++) { const e = Math.exp(L[o + j] - maxv); probs[o + j] = e; denom += e; }
+      for (let j = 0; j < V; j++) probs[o + j] /= denom;
+      loss += -Math.log(probs[o + targets[i]] + 1e-12);
+    }
+    loss /= N;
+    const out = new Tensor(1, 1);
+    out.data[0] = loss;
+    out._prev = [logits];
+    out._backward = function () {
+      const dL = logits.ensureGrad();
+      const g = out.grad[0] / N;
+      for (let i = 0; i < N; i++) {
+        const o = i * V;
+        for (let j = 0; j < V; j++) dL[o + j] += g * probs[o + j];
+        dL[o + targets[i]] -= g;
+      }
+    };
+    return out;
+  }
+
+  // ----------------------------------------------------------- Optimizer ----
+  class Adam {
+    constructor(params, opts) {
+      opts = opts || {};
+      this.params = params;
+      this.lr = opts.lr !== undefined ? opts.lr : 1e-3;
+      this.beta1 = opts.beta1 !== undefined ? opts.beta1 : 0.9;
+      this.beta2 = opts.beta2 !== undefined ? opts.beta2 : 0.99;
+      this.eps = opts.eps !== undefined ? opts.eps : 1e-8;
+      this.weightDecay = opts.weightDecay !== undefined ? opts.weightDecay : 0.01;
+      this.t = 0;
+      for (const p of params) {
+        p._m = new Float64Array(p.size);
+        p._v = new Float64Array(p.size);
+      }
+    }
+
+    zeroGrad() { for (const p of this.params) p.zeroGrad(); }
+
+    step() {
+      this.t++;
+      const bc1 = 1 - Math.pow(this.beta1, this.t);
+      const bc2 = 1 - Math.pow(this.beta2, this.t);
+      for (const p of this.params) {
+        if (!p.grad) continue;
+        const d = p.data, g = p.grad, m = p._m, v = p._v;
+        const wd = p.decay ? this.weightDecay : 0;
+        for (let i = 0; i < d.length; i++) {
+          m[i] = this.beta1 * m[i] + (1 - this.beta1) * g[i];
+          v[i] = this.beta2 * v[i] + (1 - this.beta2) * g[i] * g[i];
+          const mhat = m[i] / bc1;
+          const vhat = v[i] / bc2;
+          d[i] -= this.lr * (mhat / (Math.sqrt(vhat) + this.eps) + wd * d[i]);
+        }
+      }
+    }
+  }
+
+  // ----------------------------------------------------------- Tokenizer ----
+  class CharTokenizer {
+    constructor(text) {
+      const set = new Set(text);
+      set.add('\n'); set.add(' ');
+      this.chars = Array.from(set).sort();
+      this.stoi = {};
+      for (let i = 0; i < this.chars.length; i++) this.stoi[this.chars[i]] = i;
+      this.vocabSize = this.chars.length;
+      this.fallback = this.stoi[' '];
+    }
+
+    encode(str) {
+      const out = new Int32Array(str.length);
+      for (let i = 0; i < str.length; i++) {
+        const t = this.stoi[str[i]];
+        out[i] = t === undefined ? this.fallback : t;
+      }
+      return out;
+    }
+
+    decode(arr) {
+      let s = '';
+      for (let i = 0; i < arr.length; i++) s += this.chars[arr[i]];
+      return s;
+    }
+  }
+
+  // -------------------------------------------------------------- Model ----
+  // A miniature GPT: char-level, learned positional embeddings, pre-norm
+  // transformer blocks, untied LM head.
+  class CharLM {
+    constructor(cfg) {
+      this.cfg = {
+        vocabSize: cfg.vocabSize,
+        blockSize: cfg.blockSize || 32,   // context length T
+        nEmbd: cfg.nEmbd || 48,           // embedding width C
+        nLayer: cfg.nLayer || 2,
+        nHead: cfg.nHead || 2,
+      };
+      const { vocabSize: Vz, blockSize: T, nEmbd: C, nLayer: L, nHead: H } = this.cfg;
+      if (C % H !== 0) throw new Error('nEmbd must be divisible by nHead');
+      this.params = [];
+      const reg = (name, t, decay) => {
+        t.requiresGrad = true;
+        t.name = name;
+        t.decay = !!decay;
+        this.params.push(t);
+        return t;
+      };
+      const proj = 0.08 / Math.sqrt(2 * L); // scaled residual-projection init
+
+      this.wte = reg('wte', Tensor.randn(Vz, C, 0.08), true);
+      this.wpe = reg('wpe', Tensor.randn(T, C, 0.08), true);
+      this.blocks = [];
+      for (let l = 0; l < L; l++) {
+        this.blocks.push({
+          ln1g: reg('b' + l + '.ln1g', Tensor.full(1, C, 1)),
+          ln1b: reg('b' + l + '.ln1b', Tensor.zeros(1, C)),
+          qkvW: reg('b' + l + '.qkvW', Tensor.randn(C, 3 * C, 0.08), true),
+          qkvB: reg('b' + l + '.qkvB', Tensor.zeros(1, 3 * C)),
+          atW:  reg('b' + l + '.atW', Tensor.randn(C, C, proj), true),
+          atB:  reg('b' + l + '.atB', Tensor.zeros(1, C)),
+          ln2g: reg('b' + l + '.ln2g', Tensor.full(1, C, 1)),
+          ln2b: reg('b' + l + '.ln2b', Tensor.zeros(1, C)),
+          fcW:  reg('b' + l + '.fcW', Tensor.randn(C, 4 * C, 0.08), true),
+          fcB:  reg('b' + l + '.fcB', Tensor.zeros(1, 4 * C)),
+          prW:  reg('b' + l + '.prW', Tensor.randn(4 * C, C, proj), true),
+          prB:  reg('b' + l + '.prB', Tensor.zeros(1, C)),
+        });
+      }
+      this.lnfG = reg('lnfG', Tensor.full(1, C, 1));
+      this.lnfB = reg('lnfB', Tensor.zeros(1, C));
+      this.headW = reg('headW', Tensor.randn(C, Vz, 0.02), true);
+      this.headB = reg('headB', Tensor.zeros(1, Vz));
+
+      // reusable position-index buffers, keyed by (B,T)
+      this._posCache = {};
+    }
+
+    paramCount() {
+      let n = 0;
+      for (const p of this.params) n += p.size;
+      return n;
+    }
+
+    _posIdx(B, T) {
+      const key = B + 'x' + T;
+      let idx = this._posCache[key];
+      if (!idx) {
+        idx = new Int32Array(B * T);
+        for (let b = 0; b < B; b++) for (let t = 0; t < T; t++) idx[b * T + t] = t;
+        this._posCache[key] = idx;
+      }
+      return idx;
+    }
+
+    // xIdx: Int32Array of length B*T (tokens). targets: Int32Array B*T or null.
+    forward(xIdx, B, T, targets) {
+      if (T > this.cfg.blockSize) throw new Error('sequence longer than blockSize');
+      const H = this.cfg.nHead, C = this.cfg.nEmbd;
+      let x = add(embedding(this.wte, xIdx), embedding(this.wpe, this._posIdx(B, T)));
+      for (const bl of this.blocks) {
+        const h1 = layerNorm(x, bl.ln1g, bl.ln1b);
+        const qkv = addBias(matmul(h1, bl.qkvW), bl.qkvB);
+        const q = slice(qkv, 0, C), k = slice(qkv, C, C), v = slice(qkv, 2 * C, C);
+        const att = causalSelfAttention(q, k, v, B, T, H);
+        x = add(x, addBias(matmul(att, bl.atW), bl.atB));
+        const h2 = layerNorm(x, bl.ln2g, bl.ln2b);
+        const mlp = addBias(matmul(gelu(addBias(matmul(h2, bl.fcW), bl.fcB)), bl.prW), bl.prB);
+        x = add(x, mlp);
+      }
+      x = layerNorm(x, this.lnfG, this.lnfB);
+      const logits = addBias(matmul(x, this.headW), this.headB);
+      const loss = targets ? softmaxCrossEntropy(logits, targets) : null;
+      return { logits, loss };
+    }
+
+    serialize() {
+      const params = {};
+      for (const p of this.params) params[p.name] = Array.from(p.data);
+      return { format: 'neuroide-charlm-v1', cfg: this.cfg, params };
+    }
+
+    static deserialize(obj) {
+      const model = new CharLM(obj.cfg);
+      for (const p of model.params) {
+        const src = obj.params[p.name];
+        if (!src || src.length !== p.size) throw new Error('bad checkpoint: ' + p.name);
+        p.data.set(src);
+      }
+      return model;
+    }
+  }
+
+  // ------------------------------------------------------------- Trainer ----
+  class Trainer {
+    constructor(model, dataIdx, opts) {
+      opts = opts || {};
+      this.model = model;
+      this.batchSize = opts.batchSize || 8;
+      this.opt = new Adam(model.params, { lr: opts.lr || 1e-3, weightDecay: opts.weightDecay });
+      const T = model.cfg.blockSize;
+      // Corpus must yield at least one (T+1)-window; tile it if too short.
+      if (dataIdx.length < T + 2) {
+        const reps = Math.ceil((T + 2) / dataIdx.length);
+        const tiled = new Int32Array(dataIdx.length * reps);
+        for (let r = 0; r < reps; r++) tiled.set(dataIdx, r * dataIdx.length);
+        dataIdx = tiled;
+      }
+      this.data = dataIdx;
+      this.steps = 0;
+      this.lastLoss = null;
+    }
+
+    setLearningRate(lr) { this.opt.lr = lr; }
+
+    step() {
+      const T = this.model.cfg.blockSize, B = this.batchSize;
+      const x = new Int32Array(B * T), y = new Int32Array(B * T);
+      const maxStart = this.data.length - T - 1;
+      for (let b = 0; b < B; b++) {
+        const s = randInt(maxStart + 1);
+        for (let t = 0; t < T; t++) {
+          x[b * T + t] = this.data[s + t];
+          y[b * T + t] = this.data[s + t + 1];
+        }
+      }
+      this.opt.zeroGrad();
+      const { loss } = this.model.forward(x, B, T, y);
+      loss.backward();
+      this.opt.step();
+      this.steps++;
+      this.lastLoss = loss.data[0];
+      return this.lastLoss;
+    }
+  }
+
+  // ------------------------------------------------------------ Sampling ----
+  // Predict one next token given a context of token ids.
+  // opts: {temperature, topK}. Returns the sampled token id.
+  function nextToken(model, ctxIds, opts) {
+    opts = opts || {};
+    const temperature = Math.max(opts.temperature || 0.8, 1e-3);
+    const topK = opts.topK || 0;
+    const T = model.cfg.blockSize, V = model.cfg.vocabSize;
+    const window = ctxIds.length > T ? ctxIds.slice(-T) : ctxIds;
+    const t = window.length;
+    const { logits } = model.forward(Int32Array.from(window), 1, t, null);
+    const off = (t - 1) * V;
+    const row = new Float64Array(V);
+    for (let j = 0; j < V; j++) row[j] = logits.data[off + j] / temperature;
+    if (topK > 0 && topK < V) {
+      const sorted = Array.from(row).sort((a, b) => b - a);
+      const cut = sorted[topK - 1];
+      for (let j = 0; j < V; j++) if (row[j] < cut) row[j] = -Infinity;
+    }
+    let maxv = -Infinity;
+    for (let j = 0; j < V; j++) if (row[j] > maxv) maxv = row[j];
+    let denom = 0;
+    for (let j = 0; j < V; j++) { row[j] = Math.exp(row[j] - maxv); denom += row[j]; }
+    let r = rand() * denom, tok = V - 1;
+    for (let j = 0; j < V; j++) { r -= row[j]; if (r <= 0) { tok = j; break; } }
+    return tok;
+  }
+
+  // Autoregressive generation. opts: {maxNewTokens, temperature, topK, onToken}
+  function sample(model, tokenizer, prompt, opts) {
+    opts = opts || {};
+    const maxNew = opts.maxNewTokens || 200;
+    const ctx = Array.from(tokenizer.encode(prompt.length ? prompt : '\n'));
+    let outStr = '';
+    for (let n = 0; n < maxNew; n++) {
+      const tok = nextToken(model, ctx, opts);
+      ctx.push(tok);
+      const ch = tokenizer.chars[tok];
+      outStr += ch;
+      if (opts.onToken) opts.onToken(ch);
+    }
+    return outStr;
+  }
+
+  return {
+    Tensor, Adam, CharTokenizer, CharLM, Trainer,
+    matmul, add, addBias, slice, gelu, layerNorm, embedding,
+    causalSelfAttention, softmaxCrossEntropy,
+    sample, nextToken, seed, rand, randn, randInt,
+  };
+});
+
+;
+/*
+ * corpus.js — the starter project that appears in NeuroIDE's file explorer
+ * on first launch, including train-data.txt, the default corpus the neural
+ * network trains on. Everything is plain text baked into the app so it
+ * works fully offline.
+ */
+(function (global) {
+  'use strict';
+
+  const WELCOME_MD = `# Welcome to NeuroIDE
+
+NeuroIDE is a tiny IDE with a real neural network inside.
+No APIs. No cloud. No ML libraries. The model is a miniature
+GPT-style transformer written from scratch in plain JavaScript
+(js/nn.js) and it trains **live, in this browser tab**.
+
+## Quick start
+
+1. Open the **AI panel** on the right and press **Start training**.
+   Watch the loss curve fall — that is gradient descent running
+   on your CPU right now.
+2. After ~500 steps, type a prompt in **Generate** (try \`function \`)
+   and press **Generate**.
+3. Put your cursor in any file and press **Ctrl+Space** —
+   the model autocompletes from your cursor position.
+4. Open \`main.js\` and press **Ctrl+Enter** (or the Run button)
+   to execute it in a sandbox. Output appears in the console below.
+
+## The model learns from YOUR files
+
+By default it trains on \`train-data.txt\`. Edit that file — or switch
+the corpus to "All project files" — press **Reset model**, then train
+again. The network will imitate whatever you feed it.
+
+It is a character-level model with ~28k–200k parameters (a real GPT
+has billions), so expect it to learn *style and structure*: bracket
+matching, keywords, indentation, common phrases. It memorizes small
+corpora and babbles plausibly on bigger ones. That's not a bug —
+that's what a small brain looks like.
+
+## IDE basics
+
+- **New file**: + button in the explorer. Names ending in .js run.
+- **Ctrl+S** save (files auto-save too, into localStorage)
+- **Ctrl+Enter** run current .js file
+- **Ctrl+Space** AI autocomplete at cursor
+- Everything persists in your browser. "Reset workspace" starts over.
+
+Have fun. You are holding a complete deep-learning stack:
+tensors, autograd, attention, Adam — all inspectable in js/nn.js.
+`;
+
+  const MAIN_JS = `// main.js — press Ctrl+Enter (or the ▶ Run button) to execute.
+// Runs in a sandboxed iframe; console output shows up below.
+
+function greet(name) {
+  return "hello, " + name + "!";
+}
+
+function fib(n) {
+  if (n < 2) return n;
+  let a = 0, b = 1;
+  for (let i = 2; i <= n; i++) {
+    const t = a + b;
+    a = b;
+    b = t;
+  }
+  return b;
+}
+
+console.log(greet("neuroide"));
+
+for (let i = 1; i <= 10; i++) {
+  console.log("fib(" + i + ") =", fib(i));
+}
+
+const scores = [12, 7, 42, 3, 25];
+const total = scores.reduce((sum, x) => sum + x, 0);
+console.log("total:", total, "max:", Math.max(...scores));
+`;
+
+  const HELLO_LUA = `-- hello.lua — syntax highlighting works for Lua too.
+-- (Only .js files can be executed by the sandbox runner.)
+
+local function greet(name)
+  return "hello, " .. name .. "!"
+end
+
+local function sum(list)
+  local total = 0
+  for i = 1, #list do
+    total = total + list[i]
+  end
+  return total
+end
+
+print(greet("neuroide"))
+print("sum:", sum({ 1, 2, 3, 4, 5 }))
+
+-- Tip: paste your own Lua here, switch the AI corpus to
+-- "All project files", reset the model, and train — the
+-- network will start writing Lua-flavored text.
+`;
+
+  // ------------------------------------------------------------------------
+  // train-data.txt — the default training corpus. A character-level model
+  // learns from raw characters, so this is deliberately repetitive and
+  // structured: simple JavaScript with consistent style, plus short prose.
+  // ------------------------------------------------------------------------
+  const TRAIN_DATA = `// train-data.txt
+// This is the food for the neural network. Edit me, then reset + train.
+// The model reads raw characters and learns to predict the next one.
+
+function add(a, b) {
+  return a + b;
+}
+
+function sub(a, b) {
+  return a - b;
+}
+
+function mul(a, b) {
+  return a * b;
+}
+
+function div(a, b) {
+  if (b === 0) {
+    return 0;
+  }
+  return a / b;
+}
+
+function square(x) {
+  return x * x;
+}
+
+function cube(x) {
+  return x * x * x;
+}
+
+function isEven(n) {
+  return n % 2 === 0;
+}
+
+function isOdd(n) {
+  return n % 2 !== 0;
+}
+
+function max(a, b) {
+  if (a > b) {
+    return a;
+  }
+  return b;
+}
+
+function min(a, b) {
+  if (a < b) {
+    return a;
+  }
+  return b;
+}
+
+const one = 1;
+const two = 2;
+const three = 3;
+const four = 4;
+const five = 5;
+
+console.log(add(one, two));
+console.log(sub(five, three));
+console.log(mul(two, four));
+console.log(div(four, two));
+console.log(square(three));
+console.log(cube(two));
+
+for (let i = 0; i < 10; i++) {
+  console.log(i);
+}
+
+for (let i = 0; i < 10; i++) {
+  if (isEven(i)) {
+    console.log(i, "is even");
+  } else {
+    console.log(i, "is odd");
+  }
+}
+
+while (true) {
+  break;
+}
+
+function greet(name) {
+  return "hello, " + name;
+}
+
+console.log(greet("world"));
+console.log(greet("neuroide"));
+console.log(greet("friend"));
+
+const list = [1, 2, 3, 4, 5];
+
+function sum(list) {
+  let total = 0;
+  for (let i = 0; i < list.length; i++) {
+    total = total + list[i];
+  }
+  return total;
+}
+
+function count(list) {
+  return list.length;
+}
+
+function first(list) {
+  return list[0];
+}
+
+function last(list) {
+  return list[list.length - 1];
+}
+
+console.log(sum(list));
+console.log(count(list));
+console.log(first(list));
+console.log(last(list));
+
+// the quick brown fox jumps over the lazy dog.
+// the quick brown fox jumps over the lazy dog again.
+// a small model can learn a small world.
+// the network reads the text one character at a time.
+// the network learns to predict the next character.
+// train the model and the loss goes down.
+// sample the model and the words come out.
+
+function double(x) {
+  return x * 2;
+}
+
+function triple(x) {
+  return x * 3;
+}
+
+function half(x) {
+  return x / 2;
+}
+
+function negate(x) {
+  return -x;
+}
+
+console.log(double(21));
+console.log(triple(7));
+console.log(half(42));
+console.log(negate(5));
+
+if (one < two) {
+  console.log("one is less than two");
+}
+
+if (five > four) {
+  console.log("five is greater than four");
+}
+
+function repeat(text, times) {
+  let out = "";
+  for (let i = 0; i < times; i++) {
+    out = out + text;
+  }
+  return out;
+}
+
+console.log(repeat("ha", 3));
+console.log(repeat("na", 4));
+
+function contains(list, value) {
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] === value) {
+      return true;
+    }
+  }
+  return false;
+}
+
+console.log(contains(list, 3));
+console.log(contains(list, 9));
+
+// gradient descent is a simple idea.
+// take a small step downhill and repeat.
+// the loss tells the model how wrong it is.
+// the gradient tells the model which way to move.
+// attention lets the model look back at the context.
+// the model is small but the idea is the same as the big ones.
+
+function clamp(x, lo, hi) {
+  if (x < lo) {
+    return lo;
+  }
+  if (x > hi) {
+    return hi;
+  }
+  return x;
+}
+
+console.log(clamp(15, 0, 10));
+console.log(clamp(-3, 0, 10));
+console.log(clamp(7, 0, 10));
+
+function abs(x) {
+  if (x < 0) {
+    return -x;
+  }
+  return x;
+}
+
+console.log(abs(-9));
+console.log(abs(9));
+
+function sign(x) {
+  if (x > 0) {
+    return 1;
+  }
+  if (x < 0) {
+    return -1;
+  }
+  return 0;
+}
+
+console.log(sign(42));
+console.log(sign(-42));
+console.log(sign(0));
+
+const names = ["ada", "alan", "grace", "linus", "marge"];
+
+for (let i = 0; i < names.length; i++) {
+  console.log(greet(names[i]));
+}
+
+function reverse(text) {
+  let out = "";
+  for (let i = text.length - 1; i >= 0; i--) {
+    out = out + text[i];
+  }
+  return out;
+}
+
+console.log(reverse("stressed"));
+console.log(reverse("neuroide"));
+
+// the end of the corpus is the start of the loop.
+// feed me more text and i will learn more words.
+`;
+
+  global.NEURO_DEFAULT_FILES = {
+    'welcome.md': WELCOME_MD,
+    'main.js': MAIN_JS,
+    'hello.lua': HELLO_LUA,
+    'train-data.txt': TRAIN_DATA,
+  };
+})(typeof self !== 'undefined' ? self : this);
+
+;
+/*
+ * app.js — NeuroIDE application logic.
+ *
+ * Wires together:
+ *   - a localStorage-backed virtual file system + explorer + tabs
+ *   - a code editor (textarea + syntax-highlight overlay + line numbers)
+ *   - a sandboxed JavaScript runner (iframe) with console capture
+ *   - the from-scratch neural network (js/nn.js): live training,
+ *     text generation and cursor autocompletion
+ */
+(function () {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+
+  // ------------------------------------------------------------ storage ----
+  // localStorage can be unavailable (sandboxed iframes, private mode);
+  // fall back to in-memory storage so the app still works.
+  const store = (() => {
+    try {
+      const k = '__neuroide_probe__';
+      localStorage.setItem(k, '1');
+      localStorage.removeItem(k);
+      return localStorage;
+    } catch (e) {
+      const mem = {};
+      return {
+        getItem: (k) => (k in mem ? mem[k] : null),
+        setItem: (k, v) => { mem[k] = String(v); },
+        removeItem: (k) => { delete mem[k]; },
+      };
+    }
+  })();
+
+  const FS_KEY = 'neuroide.fs.v1';
+  const TABS_KEY = 'neuroide.tabs.v1';
+
+  // ----------------------------------------------------------------- FS ----
+  const FS = {
+    files: {},
+    load() {
+      try {
+        const raw = store.getItem(FS_KEY);
+        this.files = raw ? JSON.parse(raw) : null;
+      } catch (e) { this.files = null; }
+      if (!this.files || Object.keys(this.files).length === 0) {
+        this.files = Object.assign({}, self.NEURO_DEFAULT_FILES);
+        this.save();
+      }
+    },
+    save() { try { store.setItem(FS_KEY, JSON.stringify(this.files)); } catch (e) {} },
+    read(name) { return this.files[name]; },
+    write(name, content) { this.files[name] = content; this.save(); },
+    remove(name) { delete this.files[name]; this.save(); },
+    exists(name) { return Object.prototype.hasOwnProperty.call(this.files, name); },
+    names() { return Object.keys(this.files).sort(); },
+  };
+
+  // ------------------------------------------------------------- editor ----
+  const ed = $('ed');            // textarea
+  const hl = $('hl');            // <code> inside <pre>
+  const hlPre = $('hl-pre');
+  const gutter = $('gutter');
+
+  let openTabs = [];
+  let activeFile = null;
+
+  function langOf(name) {
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    return ({ js: 'js', mjs: 'js', json: 'json', lua: 'lua', md: 'md', markdown: 'md',
+      html: 'html', htm: 'html', css: 'css', txt: 'text' })[ext] || 'text';
+  }
+
+  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  const HL_RULES = {
+    js: {
+      re: /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?|`(?:[^`\\]|\\[\s\S])*`?)|(\b\d[\w.]*\b)|(\b(?:const|let|var|function|return|if|else|for|while|do|break|continue|new|class|extends|super|this|typeof|instanceof|in|of|switch|case|default|try|catch|finally|throw|delete|void|yield|async|await|import|export|from|static|get|set)\b)|(\b(?:true|false|null|undefined|NaN|Infinity)\b)|([A-Za-z_$][\w$]*(?=\s*\())/g,
+      cls: ['cmt', 'str', 'num', 'kw', 'lit', 'fn'],
+    },
+    lua: {
+      re: /(--\[\[[\s\S]*?\]\]|--[^\n]*)|("(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?|\[\[[\s\S]*?\]\])|(\b\d[\w.]*\b)|(\b(?:local|function|end|if|then|elseif|else|for|while|repeat|until|return|break|do|in|and|or|not|goto)\b)|(\b(?:nil|true|false|self)\b)|([A-Za-z_]\w*(?=\s*\())/g,
+      cls: ['cmt', 'str', 'num', 'kw', 'lit', 'fn'],
+    },
+    json: {
+      re: /("(?:[^"\\\n]|\\.)*")(?=\s*:)|("(?:[^"\\\n]|\\.)*")|(-?\b\d[\w.+-]*\b)|(\b(?:true|false|null)\b)/g,
+      cls: ['key', 'str', 'num', 'lit'],
+    },
+    md: {
+      re: /(^#{1,6}[^\n]*$)|(```[\s\S]*?```|`[^`\n]*`)|(\*\*[^*\n]+\*\*)|(^\s*(?:[-*+]|\d+\.)\s)|(\[[^\]\n]*\]\([^)\n]*\))/gm,
+      cls: ['head', 'str', 'kw', 'lit', 'fn'],
+    },
+  };
+
+  function highlight(code, lang) {
+    const html = esc(code);
+    const rule = HL_RULES[lang];
+    if (!rule) return html;
+    return html.replace(rule.re, (...args) => {
+      const m = args[0];
+      for (let g = 1; g <= rule.cls.length; g++) {
+        if (args[g] !== undefined) return '<span class="tk-' + rule.cls[g - 1] + '">' + m + '</span>';
+      }
+      return m;
+    });
+  }
+
+  function refreshEditor() {
+    const code = ed.value;
+    hl.innerHTML = highlight(code, langOf(activeFile || '')) + '\n';
+    const lines = code.split('\n').length;
+    let g = '';
+    for (let i = 1; i <= lines; i++) g += i + '\n';
+    gutter.textContent = g;
+    syncScroll();
+  }
+
+  function syncScroll() {
+    hlPre.scrollTop = ed.scrollTop;
+    hlPre.scrollLeft = ed.scrollLeft;
+    gutter.style.transform = 'translateY(' + (-ed.scrollTop) + 'px)';
+  }
+  ed.addEventListener('scroll', syncScroll);
+
+  let saveTimer = null;
+  ed.addEventListener('input', () => {
+    if (activeFile !== null) {
+      clearTimeout(saveTimer);
+      const name = activeFile, val = ed.value;
+      saveTimer = setTimeout(() => { FS.write(name, val); }, 250);
+    }
+    refreshEditor();
+  });
+
+  ed.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      insertAtCursor('  ');
+    } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      runActiveFile();
+    } else if (e.key === ' ' && e.ctrlKey) {
+      e.preventDefault();
+      AI.completeAtCursor();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      if (activeFile !== null) { FS.write(activeFile, ed.value); flashStatus('saved ' + activeFile); }
+    }
+  });
+
+  function insertAtCursor(text) {
+    ed.focus();
+    // execCommand keeps the browser's undo stack; fall back if unsupported.
+    let ok = false;
+    try { ok = document.execCommand('insertText', false, text); } catch (err) { ok = false; }
+    if (!ok) {
+      const s = ed.selectionStart, epos = ed.selectionEnd;
+      ed.setRangeText(text, s, epos, 'end');
+      ed.dispatchEvent(new Event('input'));
+    }
+  }
+
+  ['keyup', 'click', 'input'].forEach((ev) => ed.addEventListener(ev, updateCursorStatus));
+  function updateCursorStatus() {
+    const upto = ed.value.slice(0, ed.selectionStart);
+    const line = upto.split('\n').length;
+    const col = upto.length - upto.lastIndexOf('\n');
+    $('st-pos').textContent = 'Ln ' + line + ', Col ' + col;
+  }
+
+  // --------------------------------------------------------- tabs & files ----
+  function loadTabs() {
+    try {
+      const t = JSON.parse(store.getItem(TABS_KEY) || 'null');
+      if (t && Array.isArray(t.open)) { openTabs = t.open.filter((n) => FS.exists(n)); activeFile = t.active; }
+    } catch (e) {}
+    if (!openTabs.length) openTabs = FS.exists('welcome.md') ? ['welcome.md'] : FS.names().slice(0, 1);
+    if (!activeFile || !openTabs.includes(activeFile)) activeFile = openTabs[0] || null;
+  }
+  function saveTabs() { try { store.setItem(TABS_KEY, JSON.stringify({ open: openTabs, active: activeFile })); } catch (e) {} }
+
+  function openFile(name) {
+    if (!FS.exists(name)) return;
+    if (!openTabs.includes(name)) openTabs.push(name);
+    activeFile = name;
+    ed.value = FS.read(name);
+    ed.scrollTop = 0;
+    renderTabs();
+    renderFileList();
+    refreshEditor();
+    updateCursorStatus();
+    $('st-lang').textContent = langOf(name);
+    saveTabs();
+  }
+
+  function closeTab(name) {
+    const i = openTabs.indexOf(name);
+    if (i >= 0) openTabs.splice(i, 1);
+    if (activeFile === name) {
+      activeFile = openTabs[Math.max(0, i - 1)] || null;
+      if (activeFile) { ed.value = FS.read(activeFile); } else { ed.value = ''; }
+      refreshEditor();
+    }
+    renderTabs();
+    renderFileList();
+    saveTabs();
+  }
+
+  function renderTabs() {
+    const bar = $('tabs');
+    bar.innerHTML = '';
+    for (const name of openTabs) {
+      const t = document.createElement('div');
+      t.className = 'tab' + (name === activeFile ? ' active' : '');
+      const label = document.createElement('span');
+      label.textContent = name;
+      t.appendChild(label);
+      const x = document.createElement('span');
+      x.className = 'tab-close';
+      x.textContent = '×';
+      x.addEventListener('click', (e) => { e.stopPropagation(); closeTab(name); });
+      t.appendChild(x);
+      t.addEventListener('click', () => openFile(name));
+      bar.appendChild(t);
+    }
+  }
+
+  const EXT_BADGE = { js: 'JS', lua: 'LU', md: 'MD', json: '{}', html: '<>', css: '#', text: 'TX' };
+
+  function renderFileList() {
+    const list = $('file-list');
+    list.innerHTML = '';
+    for (const name of FS.names()) {
+      const row = document.createElement('div');
+      row.className = 'file' + (name === activeFile ? ' active' : '');
+      const badge = document.createElement('span');
+      const lang = langOf(name);
+      badge.className = 'badge badge-' + lang;
+      badge.textContent = EXT_BADGE[lang] || 'TX';
+      row.appendChild(badge);
+      const label = document.createElement('span');
+      label.className = 'fname';
+      label.textContent = name;
+      row.appendChild(label);
+      const del = document.createElement('span');
+      del.className = 'file-act';
+      del.title = 'delete';
+      del.textContent = '×';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!confirm('Delete ' + name + '?')) return;
+        FS.remove(name);
+        closeTab(name);
+        renderFileList();
+        logSys('deleted ' + name);
+      });
+      row.appendChild(del);
+      row.addEventListener('click', () => openFile(name));
+      row.addEventListener('dblclick', () => {
+        const nn2 = prompt('Rename file', name);
+        if (!nn2 || nn2 === name || FS.exists(nn2)) return;
+        FS.write(nn2, FS.read(name));
+        FS.remove(name);
+        const i = openTabs.indexOf(name);
+        if (i >= 0) openTabs[i] = nn2;
+        if (activeFile === name) activeFile = nn2;
+        renderTabs(); renderFileList(); saveTabs();
+      });
+      list.appendChild(row);
+    }
+  }
+
+  // Inline "new file" input (prompt() is blocked in sandboxed iframes).
+  $('btn-new-file').addEventListener('click', () => {
+    const list = $('file-list');
+    if (list.querySelector('.file-new')) return;
+    const row = document.createElement('div');
+    row.className = 'file file-new';
+    const input = document.createElement('input');
+    input.className = 'file-new-input';
+    input.placeholder = 'filename.js';
+    row.appendChild(input);
+    list.insertBefore(row, list.firstChild);
+    input.focus();
+    let closed = false;
+    const done = (create) => {
+      if (closed) return;
+      closed = true;
+      const name = input.value.trim();
+      row.remove();
+      if (!create || !name) return;
+      if (FS.exists(name)) { logSys('file already exists: ' + name); return; }
+      FS.write(name, '');
+      renderFileList();
+      openFile(name);
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') done(true);
+      else if (e.key === 'Escape') done(false);
+    });
+    input.addEventListener('blur', () => done(input.value.trim().length > 0));
+  });
+
+  $('btn-reset-ws').addEventListener('click', () => {
+    if (!confirm('Reset workspace? This restores the default files and deletes your changes.')) return;
+    store.removeItem(FS_KEY);
+    store.removeItem(TABS_KEY);
+    location.reload();
+  });
+
+  // ------------------------------------------------------------- console ----
+  const consoleOut = $('console-out');
+  function logEntry(type, text) {
+    const div = document.createElement('div');
+    div.className = 'entry entry-' + type;
+    div.textContent = text;
+    consoleOut.appendChild(div);
+    while (consoleOut.children.length > 500) consoleOut.removeChild(consoleOut.firstChild);
+    consoleOut.scrollTop = consoleOut.scrollHeight;
+  }
+  const logSys = (t) => logEntry('sys', t);
+  $('btn-clear-console').addEventListener('click', () => { consoleOut.innerHTML = ''; });
+
+  function flashStatus(text) {
+    const el = $('st-flash');
+    el.textContent = text;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 1200);
+  }
+
+  // -------------------------------------------------------------- runner ----
+  let runFrame = null;
+  function runActiveFile() {
+    if (!activeFile) return;
+    if (langOf(activeFile) !== 'js') { logSys('only .js files can be run (active: ' + activeFile + ')'); return; }
+    FS.write(activeFile, ed.value);
+    if (runFrame) { runFrame.remove(); runFrame = null; }
+    logSys('▶ running ' + activeFile + ' …');
+    const code = ed.value.replace(/<\/script/gi, '<\\/script');
+    const boot = [
+      '<script>',
+      'const fmt = (v) => { if (typeof v === "string") return v;',
+      '  try { return JSON.stringify(v, null, 0); } catch (e) { return String(v); } };',
+      'const send = (type, args) => parent.postMessage({ neuroRun: true, type,',
+      '  text: args.map(fmt).join(" ") }, "*");',
+      '["log","info","warn","error"].forEach((k) => {',
+      '  const orig = console[k].bind(console);',
+      '  console[k] = (...a) => { send(k === "info" ? "log" : k, a); orig(...a); };',
+      '});',
+      'window.onerror = (m, s, l, c) => { send("error", [m + " (line " + l + ")"]); };',
+      'try {',
+      code,
+      '} catch (e) { send("error", [String((e && e.stack) || e)]); }',
+      'send("done", []);',
+      '<\/script>',
+    ].join('\n');
+    runFrame = document.createElement('iframe');
+    runFrame.setAttribute('sandbox', 'allow-scripts');
+    runFrame.style.display = 'none';
+    runFrame.srcdoc = boot;
+    document.body.appendChild(runFrame);
+    setTimeout(() => { if (runFrame) { runFrame.remove(); runFrame = null; } }, 10000);
+  }
+
+  window.addEventListener('message', (e) => {
+    const d = e.data;
+    if (!d || !d.neuroRun) return;
+    if (d.type === 'done') { logSys('✓ finished'); if (runFrame) { runFrame.remove(); runFrame = null; } return; }
+    logEntry(d.type, d.text);
+  });
+
+  $('btn-run').addEventListener('click', runActiveFile);
+
+  // ------------------------------------------------------------------ AI ----
+  const PRESETS = {
+    nano:   { blockSize: 24, nEmbd: 32, nLayer: 2, nHead: 2, batchSize: 8, lr: 3e-3 },
+    small:  { blockSize: 32, nEmbd: 48, nLayer: 2, nHead: 2, batchSize: 8, lr: 2e-3 },
+    medium: { blockSize: 48, nEmbd: 64, nLayer: 3, nHead: 4, batchSize: 8, lr: 1.5e-3 },
+  };
+
+  const AI = {
+    model: null,
+    tok: null,
+    trainer: null,
+    training: false,
+    generating: false,
+    steps: 0,
+    ema: null,
+    lossHist: [],
+    histStride: 1,
+    _sinceHist: 0,
+    stepMs: 0,
+
+    corpusText() {
+      const mode = $('ai-corpus').value;
+      let text = '';
+      if (mode === 'train-file') text = FS.read('train-data.txt') || '';
+      else if (mode === 'active') text = activeFile ? (FS.read(activeFile) || '') : '';
+      else { // all files
+        text = FS.names().map((n) => FS.read(n)).join('\n\n');
+      }
+      if (!text) text = 'the quick brown fox jumps over the lazy dog. ';
+      while (text.length < 512) text += '\n' + text; // tiny corpora: tile up
+      return text;
+    },
+
+    init() {
+      const preset = PRESETS[$('ai-preset').value];
+      const corpus = this.corpusText();
+      this.tok = new NN.CharTokenizer(corpus);
+      NN.seed((Math.random() * 1e9) | 0);
+      this.model = new NN.CharLM({
+        vocabSize: this.tok.vocabSize,
+        blockSize: preset.blockSize,
+        nEmbd: preset.nEmbd,
+        nLayer: preset.nLayer,
+        nHead: preset.nHead,
+      });
+      this.trainer = new NN.Trainer(this.model, this.tok.encode(corpus), {
+        batchSize: preset.batchSize, lr: preset.lr,
+      });
+      this.steps = 0;
+      this.ema = null;
+      this.lossHist = [];
+      this.histStride = 1;
+      this._sinceHist = 0;
+      logSys('model initialized: ' + this.model.paramCount().toLocaleString() +
+        ' params, vocab ' + this.tok.vocabSize + ', corpus ' + corpus.length.toLocaleString() + ' chars');
+      this.refreshInfo();
+    },
+
+    reset() {
+      this.stopTraining();
+      this.model = null; this.tok = null; this.trainer = null;
+      this.steps = 0; this.ema = null; this.lossHist = []; this.histStride = 1; this._sinceHist = 0;
+      this.refreshInfo();
+      drawChart();
+      logSys('model reset');
+    },
+
+    ensureModel() {
+      if (!this.model) this.init();
+      if (!this.trainer) {
+        const preset = PRESETS[$('ai-preset').value];
+        this.trainer = new NN.Trainer(this.model, this.tok.encode(this.corpusText()), {
+          batchSize: preset.batchSize, lr: preset.lr,
+        });
+        this.trainer.steps = this.steps;
+      }
+    },
+
+    startTraining() {
+      this.ensureModel();
+      this.training = true;
+      $('btn-train').textContent = '⏸ Pause';
+      $('btn-train').classList.add('active');
+      $('chip-model').textContent = 'training…';
+      $('chip-model').classList.add('on');
+      this._tick();
+    },
+
+    stopTraining() {
+      this.training = false;
+      $('btn-train').textContent = '▶ Start training';
+      $('btn-train').classList.remove('active');
+      $('chip-model').textContent = this.model ? 'model: ' + this.steps + ' steps' : 'model: untrained';
+      $('chip-model').classList.remove('on');
+    },
+
+    _tick() {
+      if (!AI.training) return;
+      const t0 = performance.now();
+      let n = 0;
+      while (performance.now() - t0 < 85 && n < 24) {
+        const loss = AI.trainer.step();
+        AI.steps = AI.trainer.steps;
+        AI.ema = AI.ema === null ? loss : AI.ema * 0.95 + loss * 0.05;
+        AI._sinceHist++;
+        if (AI._sinceHist >= AI.histStride) {
+          AI._sinceHist = 0;
+          AI.lossHist.push(AI.ema);
+          if (AI.lossHist.length > 900) {
+            AI.lossHist = AI.lossHist.filter((_, i) => i % 2 === 0);
+            AI.histStride *= 2;
+          }
+        }
+        n++;
+      }
+      AI.stepMs = (performance.now() - t0) / Math.max(n, 1);
+      AI.refreshStats();
+      drawChart();
+      setTimeout(() => AI._tick(), 12);
+    },
+
+    refreshStats() {
+      $('ai-steps').textContent = this.steps.toLocaleString();
+      $('ai-loss').textContent = this.ema === null ? '–' : this.ema.toFixed(3);
+      $('ai-speed').textContent = this.stepMs ? (1000 / this.stepMs).toFixed(1) + '/s' : '–';
+      if (this.training) $('chip-model').textContent = 'training · loss ' + (this.ema || 0).toFixed(2);
+      $('st-model').textContent = this.model
+        ? this.model.paramCount().toLocaleString() + ' params · ' + this.steps + ' steps'
+        : 'no model';
+    },
+
+    refreshInfo() {
+      const p = PRESETS[$('ai-preset').value];
+      const arch = p.nLayer + '-layer transformer · ' + p.nHead + ' heads · ' +
+        p.nEmbd + '-d · ctx ' + p.blockSize;
+      $('ai-arch').textContent = this.model
+        ? arch + ' · ' + this.model.paramCount().toLocaleString() + ' params'
+        : arch;
+      this.refreshStats();
+      if (!this.training) $('chip-model').textContent = this.model ? 'model: ' + this.steps + ' steps' : 'model: untrained';
+    },
+
+    generate(prompt, maxNew, opts, onChar, onDone) {
+      if (!this.model) { logSys('train the model first (AI panel → Start training)'); if (onDone) onDone(false); return; }
+      if (this.generating) return;
+      this.generating = true;
+      const ctx = Array.from(this.tok.encode(prompt.length ? prompt : '\n'));
+      let i = 0;
+      const step = () => {
+        const t0 = performance.now();
+        while (i < maxNew && performance.now() - t0 < 24) {
+          const t = NN.nextToken(this.model, ctx, opts);
+          ctx.push(t);
+          onChar(this.tok.chars[t]);
+          i++;
+        }
+        if (i < maxNew) setTimeout(step, 0);
+        else { this.generating = false; if (onDone) onDone(true); }
+      };
+      step();
+    },
+
+    completeAtCursor() {
+      if (!this.model) { logSys('train the model first (AI panel → Start training)'); return; }
+      if (this.generating || activeFile === null) return;
+      const pos = ed.selectionStart;
+      const context = ed.value.slice(Math.max(0, pos - this.model.cfg.blockSize * 4), pos);
+      let out = '';
+      flashStatus('completing…');
+      this.generate(context, 60, { temperature: 0.5, topK: 12 }, (ch) => { out += ch; }, (ok) => {
+        if (!ok) return;
+        ed.focus();
+        ed.setSelectionRange(pos, pos);
+        insertAtCursor(out);
+        flashStatus('AI inserted ' + out.length + ' chars (Ctrl+Z to undo)');
+      });
+    },
+
+    serialize() {
+      return {
+        format: 'neuroide-checkpoint-v1',
+        chars: this.tok.chars,
+        steps: this.steps,
+        model: this.model.serialize(),
+      };
+    },
+
+    loadCheckpoint(obj) {
+      if (!obj || obj.format !== 'neuroide-checkpoint-v1') throw new Error('not a NeuroIDE checkpoint');
+      this.stopTraining();
+      this.tok = new NN.CharTokenizer(obj.chars.join(''));
+      this.model = NN.CharLM.deserialize(obj.model);
+      this.trainer = null;
+      this.steps = obj.steps || 0;
+      this.ema = null; this.lossHist = []; this.histStride = 1; this._sinceHist = 0;
+      this.refreshInfo();
+      drawChart();
+      logSys('checkpoint loaded: ' + this.model.paramCount().toLocaleString() + ' params, ' + this.steps + ' steps');
+    },
+  };
+
+  $('btn-train').addEventListener('click', () => {
+    if (AI.training) AI.stopTraining();
+    else AI.startTraining();
+  });
+  $('btn-reset-model').addEventListener('click', () => AI.reset());
+  $('ai-preset').addEventListener('change', () => {
+    if (AI.model) { AI.reset(); logSys('preset changed — model reset'); }
+    AI.refreshInfo();
+  });
+  $('ai-corpus').addEventListener('change', () => {
+    if (AI.model) { AI.reset(); logSys('corpus changed — model reset'); }
+  });
+
+  // sliders
+  const bindSlider = (id, fmt) => {
+    const s = $(id), v = $(id + '-v');
+    const upd = () => { v.textContent = fmt ? fmt(s.value) : s.value; };
+    s.addEventListener('input', upd);
+    upd();
+  };
+  bindSlider('gen-temp', (x) => (x / 100).toFixed(2));
+  bindSlider('gen-topk', (x) => (x === '0' ? 'off' : x));
+  bindSlider('gen-len');
+
+  $('btn-generate').addEventListener('click', () => {
+    if (AI.generating) return;
+    const out = $('gen-out');
+    const prompt = $('gen-prompt').value;
+    out.textContent = prompt;
+    out.classList.add('busy');
+    $('btn-generate').disabled = true;
+    AI.generate(prompt, parseInt($('gen-len').value, 10), {
+      temperature: parseFloat($('gen-temp').value) / 100,
+      topK: parseInt($('gen-topk').value, 10),
+    }, (ch) => {
+      out.textContent += ch;
+      out.scrollTop = out.scrollHeight;
+    }, () => {
+      out.classList.remove('busy');
+      $('btn-generate').disabled = false;
+    });
+  });
+
+  $('btn-insert').addEventListener('click', () => {
+    const text = $('gen-out').textContent;
+    if (!text || activeFile === null) return;
+    ed.focus();
+    insertAtCursor(text);
+  });
+
+  $('btn-complete').addEventListener('click', () => AI.completeAtCursor());
+
+  // save / load model
+  $('btn-save-model').addEventListener('click', () => {
+    if (!AI.model) { logSys('no model to save — train one first'); return; }
+    const blob = new Blob([JSON.stringify(AI.serialize())], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'neuroide-model-' + AI.steps + 'steps.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    logSys('model checkpoint downloaded');
+  });
+
+  $('btn-load-model').addEventListener('click', () => $('model-file').click());
+  $('model-file').addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try { AI.loadCheckpoint(JSON.parse(r.result)); }
+      catch (err) { logSys('failed to load checkpoint: ' + err.message); }
+    };
+    r.readAsText(f);
+    e.target.value = '';
+  });
+
+  // ---------------------------------------------------------- loss chart ----
+  const chart = $('loss-chart');
+  function drawChart() {
+    const ctx = chart.getContext('2d');
+    const W = chart.width = chart.clientWidth * (window.devicePixelRatio || 1);
+    const H = chart.height = chart.clientHeight * (window.devicePixelRatio || 1);
+    ctx.clearRect(0, 0, W, H);
+    const h = AI.lossHist;
+    if (h.length < 2) {
+      ctx.fillStyle = 'rgba(139,148,158,0.55)';
+      ctx.font = (11 * (window.devicePixelRatio || 1)) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('loss curve appears here during training', W / 2, H / 2);
+      return;
+    }
+    let lo = Infinity, hi = -Infinity;
+    for (const v of h) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    if (hi - lo < 1e-6) hi = lo + 1e-6;
+    const pad = 4 * (window.devicePixelRatio || 1);
+    ctx.beginPath();
+    for (let i = 0; i < h.length; i++) {
+      const x = pad + (W - 2 * pad) * (i / (h.length - 1));
+      const y = pad + (H - 2 * pad) * (1 - (h[i] - lo) / (hi - lo));
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = '#58a6ff';
+    ctx.lineWidth = 1.5 * (window.devicePixelRatio || 1);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(139,148,158,0.8)';
+    ctx.font = (10 * (window.devicePixelRatio || 1)) + 'px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(hi.toFixed(2), pad, 10 * (window.devicePixelRatio || 1));
+    ctx.fillText(lo.toFixed(2), pad, H - pad);
+  }
+  window.addEventListener('resize', drawChart);
+
+  // ---------------------------------------------------------------- boot ----
+  FS.load();
+  loadTabs();
+  renderFileList();
+  renderTabs();
+  if (activeFile) openFile(activeFile);
+  AI.refreshInfo();
+  drawChart();
+  logSys('NeuroIDE ready — the neural net in js/nn.js is yours: no APIs, no libraries.');
+  logSys('open the AI panel → Start training, then try Generate or Ctrl+Space.');
+})();
+
+</script>
+</body>
+</html>

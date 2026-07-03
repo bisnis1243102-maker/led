@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuroIDE — an IDE with a from-scratch neural network inside</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">🧠 <strong>NeuroIDE</strong><span class="tagline">a real neural net, trained in your tab — no APIs</span></div>
+  <div class="topbar-actions">
+    <span id="chip-model" class="chip">model: untrained</span>
+    <button id="btn-run" class="btn primary" title="Run active .js file (Ctrl+Enter)">▶ Run</button>
+    <button id="btn-reset-ws" class="btn subtle" title="Restore default files">Reset workspace</button>
+  </div>
+</header>
+
+<div id="app">
+  <aside id="sidebar">
+    <div class="panel-head">
+      <span>EXPLORER</span>
+      <button id="btn-new-file" class="icon-btn" title="New file">＋</button>
+    </div>
+    <div id="file-list"></div>
+    <div class="sidebar-note">Files live in your browser (localStorage). Double-click to rename.</div>
+  </aside>
+
+  <main id="center">
+    <div id="tabs"></div>
+    <div id="editor-wrap">
+      <div id="gutter-col"><div id="gutter"></div></div>
+      <div id="editor-stack">
+        <pre id="hl-pre" aria-hidden="true"><code id="hl"></code></pre>
+        <textarea id="ed" spellcheck="false" wrap="off" autocomplete="off" autocapitalize="off"></textarea>
+      </div>
+    </div>
+    <div id="console-panel">
+      <div class="panel-head">
+        <span>CONSOLE</span>
+        <button id="btn-clear-console" class="icon-btn" title="Clear console">✕</button>
+      </div>
+      <div id="console-out"></div>
+    </div>
+  </main>
+
+  <aside id="ai-panel">
+    <div class="panel-head"><span>NEURAL NETWORK</span></div>
+
+    <section class="ai-section">
+      <label class="row">
+        <span class="lbl">size</span>
+        <select id="ai-preset">
+          <option value="nano" selected>nano · ~28k params (fast)</option>
+          <option value="small">small · ~64k params</option>
+          <option value="medium">medium · ~183k params (slow)</option>
+        </select>
+      </label>
+      <label class="row">
+        <span class="lbl">corpus</span>
+        <select id="ai-corpus">
+          <option value="train-file" selected>train-data.txt</option>
+          <option value="all">all project files</option>
+          <option value="active">active file</option>
+        </select>
+      </label>
+      <div id="ai-arch" class="arch-line"></div>
+      <div class="btn-row">
+        <button id="btn-train" class="btn primary wide">▶ Start training</button>
+        <button id="btn-reset-model" class="btn subtle" title="Discard weights and start over">Reset</button>
+      </div>
+      <div class="stats">
+        <div><span class="stat-l">steps</span><span id="ai-steps" class="stat-v">0</span></div>
+        <div><span class="stat-l">loss</span><span id="ai-loss" class="stat-v">–</span></div>
+        <div><span class="stat-l">speed</span><span id="ai-speed" class="stat-v">–</span></div>
+      </div>
+      <canvas id="loss-chart"></canvas>
+    </section>
+
+    <section class="ai-section">
+      <div class="sec-title">GENERATE</div>
+      <input id="gen-prompt" type="text" placeholder="prompt, e.g.  function " value="function ">
+      <label class="row"><span class="lbl">temp</span>
+        <input id="gen-temp" type="range" min="10" max="150" value="60"><span id="gen-temp-v" class="slider-v"></span></label>
+      <label class="row"><span class="lbl">top-k</span>
+        <input id="gen-topk" type="range" min="0" max="40" value="12"><span id="gen-topk-v" class="slider-v"></span></label>
+      <label class="row"><span class="lbl">length</span>
+        <input id="gen-len" type="range" min="40" max="600" step="20" value="200"><span id="gen-len-v" class="slider-v"></span></label>
+      <div class="btn-row">
+        <button id="btn-generate" class="btn primary wide">✨ Generate</button>
+        <button id="btn-insert" class="btn subtle" title="Insert output at cursor">Insert</button>
+      </div>
+      <pre id="gen-out" class="gen-out">…the model's writing appears here</pre>
+    </section>
+
+    <section class="ai-section">
+      <div class="sec-title">TOOLS</div>
+      <div class="btn-row">
+        <button id="btn-complete" class="btn subtle wide" title="Ctrl+Space in the editor">⌨ Complete at cursor</button>
+      </div>
+      <div class="btn-row">
+        <button id="btn-save-model" class="btn subtle wide">💾 Save model</button>
+        <button id="btn-load-model" class="btn subtle wide">📂 Load model</button>
+      </div>
+      <input id="model-file" type="file" accept=".json" style="display:none">
+      <div class="sidebar-note">The whole model — tensors, autograd, attention, Adam — is in <code>js/nn.js</code>. Read it, it's short.</div>
+    </section>
+  </aside>
+</div>
+
+<footer id="statusbar">
+  <span id="st-pos">Ln 1, Col 1</span>
+  <span id="st-lang">–</span>
+  <span id="st-flash" class="flash"></span>
+  <span id="st-model" class="right">no model</span>
+</footer>
+
+<script src="js/nn.js"></script>
+<script src="js/corpus.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
