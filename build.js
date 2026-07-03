@@ -9,13 +9,13 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 let html = read('index.html');
 const css = read('style.css');
-const scripts = ['js/nn.js', 'js/corpus.js', 'js/app.js'].map(read).join('\n;\n');
+const scripts = ['js/nn.js', 'js/corpus.js', 'js/nlu.js', 'js/app.js', 'js/agent.js'].map(read).join('\n;\n');
 
 html = html.replace('<link rel="stylesheet" href="style.css">',
   '<style>\n' + css + '\n</style>');
 html = html.replace(
-  /<script src="js\/nn\.js"><\/script>\s*<script src="js\/corpus\.js"><\/script>\s*<script src="js\/app\.js"><\/script>/,
-  '<script>\n' + scripts.replace(/<\/script/gi, '<\\/script') + '\n</script>');
+  /(?:<script src="js\/[\w.]+\.js"><\/script>\s*)+/,
+  '<script>\n' + scripts.replace(/<\/script/gi, '<\\/script') + '\n</script>\n');
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 const out = path.join(root, 'dist', 'NeuroIDE.html');

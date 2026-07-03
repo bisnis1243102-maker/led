@@ -305,11 +305,15 @@
     input.addEventListener('blur', () => done(input.value.trim().length > 0));
   });
 
-  $('btn-reset-ws').addEventListener('click', () => {
-    if (!confirm('Reset workspace? This restores the default files and deletes your changes.')) return;
+  function resetWorkspace() {
     store.removeItem(FS_KEY);
     store.removeItem(TABS_KEY);
     location.reload();
+  }
+
+  $('btn-reset-ws').addEventListener('click', () => {
+    if (!confirm('Reset workspace? This restores the default files and deletes your changes.')) return;
+    resetWorkspace();
   });
 
   // ------------------------------------------------------------- console ----
@@ -334,13 +338,23 @@
 
   // -------------------------------------------------------------- runner ----
   let runFrame = null;
-  function runActiveFile() {
-    if (!activeFile) return;
-    if (langOf(activeFile) !== 'js') { logSys('only .js files can be run (active: ' + activeFile + ')'); return; }
-    FS.write(activeFile, ed.value);
+  let runSink = null;      // optional callback receiving {type, text} entries
+  let runTimer = null;
+
+  function endRun(note) {
+    if (runTimer) { clearTimeout(runTimer); runTimer = null; }
     if (runFrame) { runFrame.remove(); runFrame = null; }
-    logSys('▶ running ' + activeFile + ' …');
-    const code = ed.value.replace(/<\/script/gi, '<\\/script');
+    const sink = runSink;
+    runSink = null;
+    if (note && sink) sink({ type: 'sys', text: note });
+    if (sink) sink({ type: 'done', text: '' });
+  }
+
+  function runJS(source, label, sink) {
+    if (runFrame) endRun('(previous run cancelled)');
+    runSink = sink || null;
+    logSys('▶ running ' + label + ' …');
+    const code = source.replace(/<\/script/gi, '<\\/script');
     const boot = [
       '<script>',
       'const fmt = (v) => { if (typeof v === "string") return v;',
@@ -363,14 +377,22 @@
     runFrame.style.display = 'none';
     runFrame.srcdoc = boot;
     document.body.appendChild(runFrame);
-    setTimeout(() => { if (runFrame) { runFrame.remove(); runFrame = null; } }, 10000);
+    runTimer = setTimeout(() => { logSys('⏱ run timed out (10s)'); endRun('(timed out after 10s)'); }, 10000);
+  }
+
+  function runActiveFile() {
+    if (!activeFile) return;
+    if (langOf(activeFile) !== 'js') { logSys('only .js files can be run (active: ' + activeFile + ')'); return; }
+    FS.write(activeFile, ed.value);
+    runJS(ed.value, activeFile);
   }
 
   window.addEventListener('message', (e) => {
     const d = e.data;
     if (!d || !d.neuroRun) return;
-    if (d.type === 'done') { logSys('✓ finished'); if (runFrame) { runFrame.remove(); runFrame = null; } return; }
+    if (d.type === 'done') { logSys('✓ finished'); endRun(); return; }
     logEntry(d.type, d.text);
+    if (runSink) runSink({ type: d.type, text: d.text });
   });
 
   $('btn-run').addEventListener('click', runActiveFile);
@@ -688,6 +710,27 @@
     ctx.fillText(lo.toFixed(2), pad, H - pad);
   }
   window.addEventListener('resize', drawChart);
+
+  // ------------------------------------------------------------- IDE API ----
+  // Exposed for the chat agent (js/agent.js). Every mutating action the
+  // agent performs through this API is gated behind a permission card.
+  window.IDE = {
+    FS,
+    openFile,
+    closeTab,
+    renderFileList,
+    renderTabs,
+    langOf,
+    runJS,
+    runActiveFile,
+    insertAtCursor,
+    resetWorkspace,
+    logSys,
+    flashStatus,
+    getActiveFile: () => activeFile,
+    editor: ed,
+    AI,
+  };
 
   // ---------------------------------------------------------------- boot ----
   FS.load();

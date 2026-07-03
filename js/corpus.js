@@ -14,9 +14,24 @@ No APIs. No cloud. No ML libraries. The model is a miniature
 GPT-style transformer written from scratch in plain JavaScript
 (js/nn.js) and it trains **live, in this browser tab**.
 
-## Quick start
+## Chat with it
 
-1. Open the **AI panel** on the right and press **Start training**.
+The 💬 **Chat** tab on the right understands plain English:
+
+- "create a file called notes.md"
+- "add a function that adds two numbers to main.js"
+- "run main.js" · "what is 12 * 7"
+- "train for 1000 steps", then "write something"
+
+Anything that **edits files or runs code asks for your permission
+first** — you'll see an Allow / Deny card in the chat. Your English is
+parsed by a tiny intent classifier (js/nlu.js) trained from scratch in
+~50ms when the page loads; the creative writing comes from the
+transformer you train yourself.
+
+## Quick start (the model tab)
+
+1. Open the **🧠 Model** tab on the right and press **Start training**.
    Watch the loss curve fall — that is gradient descent running
    on your CPU right now.
 2. After ~500 steps, type a prompt in **Generate** (try \`function \`)

@@ -5,6 +5,10 @@ scratch** — no APIs, no cloud, no ML libraries, no dependencies at all.
 The AI is a miniature GPT-style transformer written in plain JavaScript,
 and it **trains live in your browser tab** on your own files.
 
+It also has a **chat assistant that understands plain English** and can
+create, edit, rename and delete files, and run code — but **only with your
+permission**: every action shows an Allow / Deny card in the chat first.
+
 ![what you get](#)
 ```
 ┌────────────┬──────────────────────────────┬──────────────────────┐
@@ -56,6 +60,38 @@ tree, not a forest. It learns *structure and style*: brackets, keywords,
 indentation, common phrases. Train it on a small corpus and it will
 reproduce it almost perfectly; feed it more and it babbles plausibly.
 
+## The chat assistant (`js/agent.js` + `js/nlu.js`)
+
+Open the 💬 **Chat** tab and talk to it:
+
+```
+create a file called notes.md          rename a.js to b.js
+add "hello" to notes.md                delete old.txt
+add a function that adds two numbers to main.js
+run main.js                            run `console.log(1+1)`
+what is 12 * 7                         list files
+train for 1000 steps                   write something
+how's the loss?                        complete at my cursor
+```
+
+**How it understands English** — honestly: your message goes through a
+text classifier built from scratch in `js/nlu.js` (bag-of-words + bigram
+features → softmax regression, trained by SGD on ~300 example phrasings
+in ~50ms when the page loads). It generalizes to phrasings it never saw
+(20/20 on the held-out test set) and extracts file names, quoted text,
+numbers and `code` from your sentence. Free-form *writing* comes from the
+transformer you train yourself. There is no cloud model anywhere.
+
+**The permission system** — the assistant never acts on its own:
+
+- Creating, editing, renaming or deleting files → 🔒 permission card
+- Running a file or a code snippet → 🔒 permission card
+- Inserting completions into your editor → 🔒 permission card
+- Resetting the model or workspace → 🔒 permission card
+- Each card offers **Allow once**, **Always allow** (that action type,
+  this session only), or **Deny**. Deny cancels the action entirely.
+- Read-only things (listing files, status, math, chatting) don't ask.
+
 ## What the IDE does
 
 - **File explorer** — create / rename (double-click) / delete files, persisted locally
@@ -84,12 +120,18 @@ numerical differentiation, and a training run must converge:
 ```bash
 node tests/gradcheck.js   # autodiff vs. finite differences (~1e-6 agreement)
 node tests/train.js       # loss 3.7 → 0.1 in 400 steps + sample output
+node tests/nlu.js         # intent classifier: held-out English phrasings + slots
 ```
 
 ## Honest limitations
 
-- It's a character-level model with tens of thousands of parameters —
-  it will not answer questions or write your app. It imitates its corpus.
+- The chat's English understanding covers IDE commands (files, running,
+  training, generating) — it's an intent classifier, not a general
+  conversationalist. Off-domain questions get a polite "say help".
+- The generative model is character-level with tens of thousands of
+  parameters — it imitates its training corpus rather than writing new
+  programs. Code written *for* you ("a function that adds two numbers")
+  comes from the assistant's built-in templates.
 - Training uses one CPU core (plain JS, no WebGPU) — nano runs ~20-30 steps/s.
 - The sandboxed runner can't stop an infinite loop in your code
   (close/reload the tab if you write one).
@@ -100,8 +142,10 @@ node tests/train.js       # loss 3.7 → 0.1 in 400 steps + sample output
 index.html        app shell
 style.css         dark IDE theme
 js/nn.js          the neural network engine (the interesting file)
+js/nlu.js         English → intent classifier + slot extraction (from scratch)
+js/agent.js       chat assistant + the Allow/Deny permission system
 js/app.js         IDE logic: editor, tabs, runner, AI panel
 js/corpus.js      starter files + default training corpus
-tests/            gradient check + training smoke test (Node)
+tests/            gradient check, training test, NLU accuracy test (Node)
 build.js          bundles everything into dist/NeuroIDE.html
 ```

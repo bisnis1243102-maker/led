@@ -46,8 +46,20 @@
   </main>
 
   <aside id="ai-panel">
-    <div class="panel-head"><span>NEURAL NETWORK</span></div>
+    <div class="panel-tabs">
+      <button class="ptab active" data-tab="chat">💬 Chat</button>
+      <button class="ptab" data-tab="model">🧠 Model</button>
+    </div>
 
+    <div id="tab-chat" class="tab-view">
+      <div id="chat-log"></div>
+      <form id="chat-form" autocomplete="off">
+        <input id="chat-in" type="text" placeholder='e.g. create a file called notes.md'>
+        <button class="btn primary" type="submit">Send</button>
+      </form>
+    </div>
+
+    <div id="tab-model" class="tab-view hidden">
     <section class="ai-section">
       <label class="row">
         <span class="lbl">size</span>
@@ -106,6 +118,7 @@
       <input id="model-file" type="file" accept=".json" style="display:none">
       <div class="sidebar-note">The whole model — tensors, autograd, attention, Adam — is in <code>js/nn.js</code>. Read it, it's short.</div>
     </section>
+    </div>
   </aside>
 </div>
 
@@ -118,6 +131,8 @@
 
 <script src="js/nn.js"></script>
 <script src="js/corpus.js"></script>
+<script src="js/nlu.js"></script>
 <script src="js/app.js"></script>
+<script src="js/agent.js"></script>
 </body>
 </html>
