@@ -51,9 +51,10 @@
 <canvas id="gl"></canvas>
 <canvas id="hud"></canvas>
 <div id="msg" class="banner"></div>
-<div id="topbar">AEROWING · procedural flight simulator · no libraries, no APIs</div>
-<div id="help">↑↓ pitch · ←→ roll · A/D rudder · W/S throttle · B brake · C camera · R reset · P pause · M mute</div>
+<div id="topbar">AEROWING · flight simulator · no libraries, no keys</div>
+<div id="help">↑↓ pitch · ←→ roll · A/D rudder · W/S throttle · B brake · C camera · R reset · P pause · M mute · 1-4 map (2 Alps · 3 Grand Canyon · 4 Fuji)</div>
 <div id="btn-cam" class="tbtn">CAM</div>
+<div id="btn-map" class="tbtn" style="top:12px;right:88px;">MAP</div>
 <div id="btn-reset" class="tbtn">RESET</div>
 <div id="stick"><div class="knob"></div></div>
 <div id="throt"><div class="knob"></div></div>
@@ -329,6 +330,30 @@ void main(){
   fragColor = vec4(toneMap(col), 1.0);
 }`;
 
+const realVS = COMMON + `
+in vec3 aPos; in vec3 aNor; in vec2 aUV;
+uniform mat4 uVP;
+out vec3 vPos; out vec3 vNor; out vec2 vUV;
+void main(){ vPos = aPos; vNor = aNor; vUV = aUV; gl_Position = uVP * vec4(aPos, 1.0); }`;
+const realFS = COMMON + `
+uniform vec3 uSun; uniform vec3 uCam; uniform float uT;
+uniform sampler2D uSat;
+in vec3 vPos; in vec3 vNor; in vec2 vUV;
+out vec4 fragColor;
+void main(){
+  vec3 base = texture(uSat, vUV).rgb;
+  base = pow(base, vec3(0.92)) * 1.06;                 // gentle lift
+  vec3 n = normalize(vNor);
+  float diff = max(dot(n, uSun), 0.0);
+  float cloudShadow = 1.0 - 0.38 * cloudDen(vPos.xz - uSun.xz * 1500.0, uT);
+  vec3 lit = base * (0.52 + 0.75 * diff) * cloudShadow;
+  float dist = length(vPos - uCam);
+  vec3 rd = normalize(vPos - uCam);
+  float fog = 1.0 - exp(-pow(dist * 0.000115, 1.4));
+  lit = mix(lit, skyCol(rd, uSun) * 0.98, fog);
+  fragColor = vec4(toneMap(lit), 1.0);
+}`;
+const realProg = program(realVS, realFS);
 const terrProg = program(terrVS, terrFS);
 const skyProg = program(skyVS, skyFS);
 const meshProg = program(meshVS, meshFS);
@@ -371,110 +396,106 @@ skyProg.vbo = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, skyProg.vbo);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
 
-// aircraft mesh: lofted octagonal fuselage + thick tapered wings (+Z fwd)
+// aircraft: Cessna 172 Skyhawk proportions (len 8.3m, span 11m, high wing)
 function buildPlane(){
   const P = [], N = [], C = [];
   function quad(a,b,c,d,col){
     const n = V.norm(V.cross(V.sub(b,a), V.sub(c,a)));
     for (const v of [a,b,c, a,c,d]) { P.push(...v); N.push(...n); C.push(...col); }
   }
-  const white = [0.93,0.94,0.96], red = [0.78,0.10,0.12],
-        grey = [0.72,0.74,0.78], glass = [0.10,0.14,0.22], dark = [0.13,0.14,0.17];
-  // fuselage stations: [z, radius, y-offset, color]
+  function quad2(a,b,c,d,col){ quad(a,b,c,d,col); quad(d,c,b,a,col); } // double-sided
+  function box(cx,cy,cz,sx,sy,sz,col){
+    const x0=cx-sx/2,x1=cx+sx/2,y0=cy-sy/2,y1=cy+sy/2,z0=cz-sz/2,z1=cz+sz/2;
+    quad([x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1],col);
+    quad([x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0],col);
+    quad([x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0],col);
+    quad([x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],col);
+    quad([x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0],col);
+    quad([x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1],col);
+  }
+  const white=[0.94,0.94,0.95], red=[0.72,0.09,0.12], grey=[0.70,0.72,0.76],
+        glass=[0.09,0.13,0.20], dark=[0.12,0.13,0.16];
+  // fuselage loft: [z, halfWidth, yBottom, yTop, color]
   const st = [
-    [ 3.90, 0.05, 0.00, red],
-    [ 3.55, 0.34, 0.00, red],
-    [ 2.60, 0.58, 0.05, white],
-    [ 1.20, 0.66, 0.10, white],
-    [-0.40, 0.60, 0.08, white],
-    [-1.80, 0.38, 0.14, white],
-    [-3.30, 0.14, 0.30, white],
+    [ 4.10, 0.10, -0.28, -0.10, red],   // spinner
+    [ 3.85, 0.40, -0.52,  0.18, red],   // cowl front
+    [ 3.10, 0.55, -0.60,  0.30, white], // cowl
+    [ 2.10, 0.62, -0.66,  0.42, white], // firewall / windshield base
+    [ 1.25, 0.62, -0.68,  1.02, white], // cabin front (windshield top)
+    [-0.25, 0.60, -0.62,  1.00, white], // cabin rear
+    [-1.60, 0.38, -0.35,  0.62, white], // tailcone
+    [-3.00, 0.22, -0.12,  0.48, white],
+    [-4.10, 0.06,  0.16,  0.42, white], // tail end
   ];
-  const SEG = 8;
-  const ring = (zi) => {
-    const [z, r, yo] = st[zi];
-    const pts = [];
-    for (let k = 0; k < SEG; k++) {
-      const a = (k / SEG) * Math.PI * 2 + Math.PI / SEG;
-      pts.push([Math.cos(a) * r, Math.sin(a) * r * 0.92 + yo, z]);
-    }
-    return pts;
+  const ring = (i) => {
+    const [z,hw,yb,yt] = st[i];
+    return [[-hw,yb,z],[hw,yb,z],[hw,yt,z],[-hw,yt,z]];
   };
   for (let i = 0; i < st.length - 1; i++) {
-    const A = ring(i), B = ring(i + 1);
-    for (let k = 0; k < SEG; k++) {
-      const k2 = (k + 1) % SEG;
-      const midY = (A[k][1] + A[k2][1]) / 2;
-      let col = st[i][3];
-      if (col === white && midY < -0.15) col = grey; // belly
-      quad(A[k], A[k2], B[k2], B[k], col);
-    }
+    const A = ring(i), B = ring(i+1), col = st[i][4];
+    quad(A[0],A[1],B[1],B[0], col===white?grey:col);      // belly
+    quad(A[1],A[2],B[2],B[1], col);                        // right
+    quad(A[3],A[0],B[0],B[3], col);                        // left
+    quad(A[2],A[3],B[3],B[2], col);                        // top
   }
-  // tail cap
-  const T = ring(st.length - 1);
-  for (let k = 1; k < SEG - 1; k++) quad(T[0], T[k], T[k+1], T[k+1], white);
-  // canopy
-  quad([-0.42,0.62,1.30],[0.42,0.62,1.30],[0.30,1.02,0.55],[-0.30,1.02,0.55], glass);
-  quad([0.42,0.62,1.30],[0.42,0.62,-0.40],[0.30,1.02,-0.30],[0.30,1.02,0.55], glass);
-  quad([-0.42,0.62,-0.40],[-0.42,0.62,1.30],[-0.30,1.02,0.55],[-0.30,1.02,-0.30], glass);
-  quad([0.42,0.62,-0.40],[-0.42,0.62,-0.40],[-0.30,1.02,-0.30],[0.30,1.02,-0.30], glass);
-  quad([-0.30,1.02,0.55],[0.30,1.02,0.55],[0.30,1.02,-0.30],[-0.30,1.02,-0.30], glass);
-  // wing builder: root/tip leading-trailing corners with thickness
-  function wing(side){ // side = +1 right, -1 left
-    const s2 = side;
-    const rootL=[s2*0.55,0.02,1.15], rootT=[s2*0.55,0.02,-0.55];
-    const tipL=[s2*5.5,0.38,0.72], tipT=[s2*5.5,0.38,-0.28];
-    const th = (p, t) => [p[0], p[1] + t, p[2]];
-    const rt=0.15, tt=0.08;
-    // top, bottom
-    quad(th(rootL,rt), th(tipL,tt), th(tipT,tt), th(rootT,rt), white);
-    quad(th(rootT,0), th(tipT,0), th(tipL,0), th(rootL,0), grey);
-    // leading edge, trailing edge, tip cap (red)
-    quad(th(rootL,0), th(tipL,0), th(tipL,tt), th(rootL,rt), white);
-    quad(th(rootT,rt), th(tipT,tt), th(tipT,0), th(rootT,0), white);
-    quad(th(tipL,0), th(tipT,0), th(tipT,tt), th(tipL,tt), red);
-    if (side < 0) { // fix winding for mirrored side
+  const T = ring(st.length-1);
+  quad(T[0],T[1],T[2],T[3], white);
+  // windshield + side windows (slightly proud of the skin)
+  quad([-0.55,0.46,2.05],[0.55,0.46,2.05],[0.52,1.00,1.28],[-0.52,1.00,1.28], glass);
+  quad([0.625,0.30,1.30],[0.625,0.30,-0.20],[0.615,0.92,-0.22],[0.615,0.92,1.05], glass);
+  quad([-0.625,0.30,-0.20],[-0.625,0.30,1.30],[-0.615,0.92,1.05],[-0.615,0.92,-0.22], glass);
+  // red accent stripe along the sides
+  quad([0.63,-0.10,3.05],[0.63,-0.10,-3.40],[0.62,0.12,-3.60],[0.62,0.12,3.05], red);
+  quad([-0.63,-0.10,-3.40],[-0.63,-0.10,3.05],[-0.62,0.12,3.05],[-0.62,0.12,-3.60], red);
+  // high wing: root chord 1.63m, tip 1.12m, span 11m, small dihedral
+  function wing(sd){
+    const rL=[sd*0.60,1.06,1.42], rT=[sd*0.60,1.06,-0.21];
+    const tL=[sd*5.50,1.22,1.10], tT=[sd*5.50,1.22,-0.02];
+    const th=(p,t)=>[p[0],p[1]+t,p[2]];
+    const rt=0.16, tt=0.09;
+    if (sd > 0) {
+      quad(th(rL,rt), th(tL,tt), th(tT,tt), th(rT,rt), white);
+      quad(th(rT,0), th(tT,0), th(tL,0), th(rL,0), grey);
+      quad(th(rL,0), th(tL,0), th(tL,tt), th(rL,rt), white);
+      quad(th(rT,rt), th(tT,tt), th(tT,0), th(rT,0), white);
+      quad(th(tL,0), th(tT,0), th(tT,tt), th(tL,tt), red);
+    } else {
+      quad(th(rT,rt), th(tT,tt), th(tL,tt), th(rL,rt), white);
+      quad(th(rL,0), th(tL,0), th(tT,0), th(rT,0), grey);
+      quad(th(tL,0), th(rL,0), th(rL,rt), th(tL,tt), white);
+      quad(th(rT,0), th(tT,0), th(tT,tt), th(rT,rt), white);
+      quad(th(tT,0), th(tL,0), th(tL,tt), th(tT,tt), red);
     }
+    // wing strut
+    const a=[sd*0.62,-0.45,0.85], b=[sd*2.95,1.02,0.72];
+    quad2([a[0],a[1],a[2]-0.05],[b[0],b[1],b[2]-0.05],[b[0],b[1],b[2]+0.05],[a[0],a[1],a[2]+0.05], white);
   }
   wing(1); wing(-1);
   // horizontal stabilizer
-  function stab(side){
-    const s2 = side;
-    const rL=[s2*0.16,0.30,-2.55], rT=[s2*0.16,0.30,-3.25];
-    const tL=[s2*1.9,0.34,-2.75], tT=[s2*1.9,0.34,-3.30];
+  function stab(sd){
+    const rL=[sd*0.10,0.30,-3.42], rT=[sd*0.10,0.30,-4.12];
+    const tL=[sd*1.70,0.32,-3.70], tT=[sd*1.70,0.32,-4.14];
     const th=(p,t)=>[p[0],p[1]+t,p[2]];
-    quad(th(rL,0.07), th(tL,0.05), th(tT,0.05), th(rT,0.07), white);
-    quad(th(rT,0), th(tT,0), th(tL,0), th(rL,0), grey);
-    quad(th(tL,0), th(tT,0), th(tT,0.05), th(tL,0.05), red);
+    if (sd > 0) { quad(th(rL,0.06), th(tL,0.05), th(tT,0.05), th(rT,0.06), white);
+      quad(th(rT,0), th(tT,0), th(tL,0), th(rL,0), grey); }
+    else { quad(th(rT,0.06), th(tT,0.05), th(tL,0.05), th(rL,0.06), white);
+      quad(th(rL,0), th(tL,0), th(tT,0), th(rT,0), grey); }
   }
   stab(1); stab(-1);
-  // vertical fin
-  quad([0.05,0.35,-2.45],[0.05,0.35,-3.35],[0.05,1.75,-3.55],[0.05,1.75,-3.05], white);
-  quad([-0.05,0.35,-3.35],[-0.05,0.35,-2.45],[-0.05,1.75,-3.05],[-0.05,1.75,-3.55], white);
-  quad([-0.05,1.75,-3.05],[0.05,1.75,-3.05],[0.05,1.75,-3.55],[-0.05,1.75,-3.55], red);
-  quad([-0.05,0.35,-2.45],[0.05,0.35,-2.45],[0.05,1.75,-3.05],[-0.05,1.75,-3.05], white);
-  // gear: legs + wheel pants
-  function gear(x, z){
-    const leg=(x2,z2)=>{
-      quad([x2-0.05,-0.15,z2+0.05],[x2+0.05,-0.15,z2+0.05],[x2+0.05,-0.72,z2+0.05],[x2-0.05,-0.72,z2+0.05], dark);
-      quad([x2+0.05,-0.15,z2-0.05],[x2-0.05,-0.15,z2-0.05],[x2-0.05,-0.72,z2-0.05],[x2+0.05,-0.72,z2-0.05], dark);
-    };
-    leg(x, z);
-    // wheel pant (teardrop-ish box)
-    const y=-0.86;
-    const box=(cx,cy,cz,sx,sy,sz,col)=>{
-      const x0=cx-sx/2,x1=cx+sx/2,y0=cy-sy/2,y1=cy+sy/2,z0=cz-sz/2,z1=cz+sz/2;
-      quad([x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1],col);
-      quad([x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0],col);
-      quad([x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0],col);
-      quad([x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],col);
-      quad([x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0],col);
-      quad([x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1],col);
-    };
-    box(x, y, z, 0.22, 0.32, 0.78, red);
-    box(x, y-0.08, z, 0.12, 0.28, 0.34, dark);
+  // swept vertical fin + rudder cap
+  quad2([0.04,0.40,-2.95],[0.04,0.40,-4.15],[0.04,1.95,-4.35],[0.04,1.95,-3.85], white);
+  quad2([-0.04,0.40,-4.15],[-0.04,0.40,-2.95],[-0.04,1.95,-3.85],[-0.04,1.95,-4.35], white);
+  quad([-0.04,1.95,-3.85],[0.04,1.95,-3.85],[0.04,1.95,-4.35],[-0.04,1.95,-4.35], red);
+  quad2([0,0.42,-2.95],[0,1.95,-3.85],[0.04,1.72,-3.72],[0.04,0.55,-3.0], white); // leading edge fill
+  // tricycle gear: nose + two mains with pants
+  function wheel(x, z, pant){
+    box(x, -1.02, z, 0.14, 0.44, 0.44, dark);
+    if (pant) box(x, -0.92, z, 0.20, 0.34, 0.72, red);
   }
-  gear(-1.05, 0.25); gear(1.05, 0.25); gear(0, 3.0);
+  box(0, -0.72, 2.55, 0.10, 0.55, 0.10, dark); wheel(0, 2.55, true);
+  quad2([0.62,-0.55,0.05],[1.18,-0.85,-0.10],[1.18,-0.85,0.14],[0.62,-0.55,0.33], white);
+  quad2([-1.18,-0.85,-0.10],[-0.62,-0.55,0.05],[-0.62,-0.55,0.33],[-1.18,-0.85,0.14], white);
+  wheel(1.18, 0.0, true); wheel(-1.18, 0.0, true);
   return { pos: new Float32Array(P), nor: new Float32Array(N), col: new Float32Array(C), n: P.length/3 };
 }
 function buildProp(){
@@ -525,15 +546,180 @@ function jsH(x, z){
   h = 24*(1-s3) + h*s3;
   return h;
 }
-const groundAt = (x,z)=>Math.max(jsH(x,z), 0);
+const groundAt = (x,z) => worldMode === 0 ? Math.max(jsH(x,z), 0) : realHeight(x, z);
+function isFlatAround(x, z){
+  const h0 = groundAt(x, z);
+  let lo = h0, hi = h0;
+  for (const [dx,dz] of [[12,0],[-12,0],[0,12],[0,-12]]) {
+    const h = groundAt(x+dx, z+dz);
+    if (h < lo) lo = h; if (h > hi) hi = h;
+  }
+  return hi - lo < 2.5;
+}
 const onRunway = (x,z)=>Math.abs(x)<24 && Math.abs(z+500)<760;
+
+// ========================================================== real earth ===
+// Streams real elevation (AWS Terrain Tiles / Mapzen terrarium, no key) and
+// real satellite imagery (Esri World Imagery, no key) for famous regions.
+const REGIONS = [
+  { name: 'Procedural Highlands' },
+  { name: 'Matterhorn · Swiss Alps',  lat: 45.955, lon: 7.70,  headingDeg: 315, agl: 1500 },
+  { name: 'Grand Canyon · Arizona',   lat: 36.06,  lon: -112.14, headingDeg: 0,  agl: 1500 },
+  { name: 'Mount Fuji · Japan',       lat: 35.28,  lon: 138.73, headingDeg: 0,  agl: 1400 },
+];
+let worldMode = 0;               // index into REGIONS
+const REGION_CACHE = {};
+let loadingRegion = false;
+
+function lonLatToTile(lat, lon, z){
+  const n = 2 ** z;
+  const la = lat * Math.PI / 180;
+  return [Math.floor((lon + 180) / 360 * n),
+          Math.floor((1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * n)];
+}
+function loadImg(url){
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error('tile fetch failed'));
+    im.src = url;
+  });
+}
+
+async function loadRegion(idx){
+  const R = REGIONS[idx];
+  const ZE = 11, ZI = 13;
+  const [cx, cy] = lonLatToTile(R.lat, R.lon, ZE);
+  const metersPerTile = 40075016.686 * Math.cos(R.lat * Math.PI / 180) / (2 ** ZE);
+  const mpp = metersPerTile / 256;      // ~53 m/px elevation, imagery 4x finer
+  let done = 0; const total = 9 + 144;
+  const prog = () => banner('Loading ' + R.name + '\n' + done + ' / ' + total + ' tiles');
+  prog();
+
+  // elevation: 3x3 terrarium tiles -> 768x768 float heightmap
+  const eCan = document.createElement('canvas');
+  eCan.width = eCan.height = 768;
+  const eCtx = eCan.getContext('2d', { willReadFrequently: true });
+  await Promise.all([].concat(...[-1,0,1].map(dy => [-1,0,1].map(dx =>
+    loadImg('https://s3.amazonaws.com/elevation-tiles-prod/terrarium/' + ZE + '/' + (cx+dx) + '/' + (cy+dy) + '.png')
+      .then(im => { eCtx.drawImage(im, (dx+1)*256, (dy+1)*256); done++; prog(); })
+  ))));
+  const px = eCtx.getImageData(0, 0, 768, 768).data;
+  const hmap = new Float32Array(768 * 768);
+  for (let i = 0; i < hmap.length; i++) {
+    hmap[i] = (px[i*4] * 256 + px[i*4+1] + px[i*4+2] / 256) - 32768;
+  }
+
+  // imagery: 12x12 esri tiles (z13) -> 3072x3072 atlas
+  const iCan = document.createElement('canvas');
+  iCan.width = iCan.height = 3072;
+  const iCtx = iCan.getContext('2d');
+  const bx = (cx - 1) * 4, by = (cy - 1) * 4;
+  await Promise.all([].concat(...Array.from({length:12}, (_, j) => Array.from({length:12}, (_, i) =>
+    loadImg('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + ZI + '/' + (by+j) + '/' + (bx+i))
+      .then(im => { iCtx.drawImage(im, i*256, j*256); done++; if (done % 12 === 0) prog(); })
+  ))));
+
+  // mesh: 385x385 vertices over the 40km square
+  const N = 385, HM = 768;
+  const sample = (fx, fy) => { // bilinear in heightmap pixel space
+    fx = Math.max(0, Math.min(HM - 1.001, fx)); fy = Math.max(0, Math.min(HM - 1.001, fy));
+    const x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0;
+    const i2 = y0 * HM + x0;
+    return (hmap[i2] * (1-ax) + hmap[i2+1] * ax) * (1-ay) +
+           (hmap[i2+HM] * (1-ax) + hmap[i2+HM+1] * ax) * ay;
+  };
+  const half = (HM * mpp) / 2;
+  const pos = new Float32Array(N*N*3), nor = new Float32Array(N*N*3), uv = new Float32Array(N*N*2);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const fx = i / (N-1) * (HM-1), fy = j / (N-1) * (HM-1);
+    const h = sample(fx, fy);
+    const k = j * N + i;
+    pos[k*3]   = fx * mpp - half;
+    pos[k*3+1] = h;
+    pos[k*3+2] = half - fy * mpp;       // north = +z
+    const e = 2;
+    const nx = sample(fx-e, fy) - sample(fx+e, fy);
+    const nz = sample(fx, fy+e) - sample(fx, fy-e);   // +z is -fy
+    const nv = V.norm([nx, 2 * e * mpp, nz]);
+    nor[k*3] = nv[0]; nor[k*3+1] = nv[1]; nor[k*3+2] = nv[2];
+    uv[k*2] = i / (N-1); uv[k*2+1] = j / (N-1);
+  }
+  const idxA = new Uint32Array((N-1)*(N-1)*6);
+  let k2 = 0;
+  for (let j = 0; j < N-1; j++) for (let i = 0; i < N-1; i++) {
+    const a = j*N+i, b = a+1, c = a+N, d = c+1;
+    idxA[k2++]=a; idxA[k2++]=b; idxA[k2++]=c; idxA[k2++]=b; idxA[k2++]=d; idxA[k2++]=c;
+  }
+  const mkBuf = (data, target) => {
+    const b = gl.createBuffer();
+    gl.bindBuffer(target || gl.ARRAY_BUFFER, b);
+    gl.bufferData(target || gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    return b;
+  };
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, iCan);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+  REGION_CACHE[idx] = {
+    hmap, mpp, half, HM, sample,
+    vp: mkBuf(pos), vn: mkBuf(nor), vt: mkBuf(uv),
+    ibo: mkBuf(idxA, gl.ELEMENT_ARRAY_BUFFER), count: idxA.length, tex,
+  };
+}
+
+function realHeight(x, z){
+  const RC = REGION_CACHE[worldMode];
+  if (!RC) return 0;
+  return RC.sample((x + RC.half) / RC.mpp, (RC.half - z) / RC.mpp);
+}
+
+async function setWorld(idx){
+  if (loadingRegion || idx === worldMode) return;
+  if (idx === 0) {
+    worldMode = 0;
+    document.getElementById('topbar').textContent = 'AEROWING · flight simulator · no libraries, no keys';
+    resetPlane(true);
+    return;
+  }
+  if (!REGION_CACHE[idx]) {
+    loadingRegion = true;
+    try { await loadRegion(idx); }
+    catch (e) {
+      banner('Could not load map tiles\n(offline? blocked network?)\nstaying on procedural world');
+      setTimeout(() => banner(''), 3000);
+      loadingRegion = false;
+      return;
+    }
+    loadingRegion = false;
+  }
+  worldMode = idx;
+  document.getElementById('topbar').textContent = REGIONS[idx].name +
+    ' · real terrain — imagery © Esri/Maxar, elevation © Mapzen/AWS';
+  banner('');
+  resetPlane(true);
+}
+document.getElementById('btn-map').addEventListener('click', () => setWorld((worldMode + 1) % REGIONS.length));
 
 // ============================================================= physics ===
 const plane = {};
 function resetPlane(air){
-  plane.pos = air ? [0, 500, 800] : [0, groundAt(0, -1180) + 1.15, -1180];
-  plane.r = [1,0,0]; plane.u = [0,1,0]; plane.f = [0,0,air ? 1 : 1];
-  plane.vel = air ? [0, 0, 55] : [0,0,0];
+  if (worldMode !== 0) {
+    const R = REGIONS[worldMode];
+    const hRad = (R.headingDeg || 0) * Math.PI / 180;
+    const f = [Math.sin(hRad), 0, Math.cos(hRad)];
+    plane.pos = [0, realHeight(0, 0) + (R.agl || 1200), 0];
+    plane.r = V.norm(V.cross([0,1,0], f)); plane.u = [0,1,0]; plane.f = f;
+    plane.vel = V.scale(f, 55);
+  } else {
+    plane.pos = air ? [0, 500, 800] : [0, groundAt(0, -1180) + 1.15, -1180];
+    plane.r = [1,0,0]; plane.u = [0,1,0]; plane.f = [0,0,1];
+    plane.vel = air ? [0, 0, 55] : [0,0,0];
+  }
   plane.throttle = air ? 0.75 : 0;
   plane.onGround = !air;
   plane.crashed = false;
@@ -617,7 +803,8 @@ function stepPhysics(dt){
     // touching down or crashing?
     if (p.pos[1] <= gY) {
       const bank = Math.abs(p.r[1]);
-      const gentle = p.vel[1] > -4.5 && bank < 0.25 && onRunway(p.pos[0], p.pos[2]);
+      const gentle = p.vel[1] > -4.5 && bank < 0.25 &&
+        (worldMode === 0 ? onRunway(p.pos[0], p.pos[2]) : isFlatAround(p.pos[0], p.pos[2]));
       if (gentle) {
         p.onGround = true;
         p.pos[1] = gY;
@@ -642,6 +829,7 @@ addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'c') camMode = (camMode + 1) % 2;
   if (e.key.toLowerCase() === 'p') paused = !paused;
   if (e.key.toLowerCase() === 'm') muted = !muted;
+  if (e.key >= '1' && e.key <= '4') setWorld(parseInt(e.key, 10) - 1);
   startAudio();
 });
 addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
@@ -888,19 +1076,40 @@ function render(t){
   gl.depthMask(true);
 
   // terrain
-  gl.useProgram(terrProg);
-  gl.bindBuffer(gl.ARRAY_BUFFER, terrProg.vbo);
-  loc = gl.getAttribLocation(terrProg, 'aXZ');
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, terrProg.ibo);
-  const sx = Math.round(camPos[0]/SPACING)*SPACING, sz = Math.round(camPos[2]/SPACING)*SPACING;
-  gl.uniform2f(gl.getUniformLocation(terrProg, 'uSnap'), sx, sz);
-  gl.uniformMatrix4fv(gl.getUniformLocation(terrProg, 'uVP'), false, vp);
-  gl.uniform3fv(gl.getUniformLocation(terrProg, 'uSun'), sunDir);
-  gl.uniform3fv(gl.getUniformLocation(terrProg, 'uCam'), camPos);
-  gl.uniform1f(gl.getUniformLocation(terrProg, 'uT'), t);
-  gl.drawElements(gl.TRIANGLES, terrProg.count, gl.UNSIGNED_INT, 0);
+  const RC = worldMode !== 0 ? REGION_CACHE[worldMode] : null;
+  if (RC) {
+    gl.useProgram(realProg);
+    const bindA = (name, buf, sz2) => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      const l = gl.getAttribLocation(realProg, name);
+      gl.enableVertexAttribArray(l);
+      gl.vertexAttribPointer(l, sz2, gl.FLOAT, false, 0, 0);
+    };
+    bindA('aPos', RC.vp, 3); bindA('aNor', RC.vn, 3); bindA('aUV', RC.vt, 2);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, RC.ibo);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, RC.tex);
+    gl.uniform1i(gl.getUniformLocation(realProg, 'uSat'), 0);
+    gl.uniformMatrix4fv(gl.getUniformLocation(realProg, 'uVP'), false, vp);
+    gl.uniform3fv(gl.getUniformLocation(realProg, 'uSun'), sunDir);
+    gl.uniform3fv(gl.getUniformLocation(realProg, 'uCam'), camPos);
+    gl.uniform1f(gl.getUniformLocation(realProg, 'uT'), t);
+    gl.drawElements(gl.TRIANGLES, RC.count, gl.UNSIGNED_INT, 0);
+  } else {
+    gl.useProgram(terrProg);
+    gl.bindBuffer(gl.ARRAY_BUFFER, terrProg.vbo);
+    loc = gl.getAttribLocation(terrProg, 'aXZ');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, terrProg.ibo);
+    const sx = Math.round(camPos[0]/SPACING)*SPACING, sz = Math.round(camPos[2]/SPACING)*SPACING;
+    gl.uniform2f(gl.getUniformLocation(terrProg, 'uSnap'), sx, sz);
+    gl.uniformMatrix4fv(gl.getUniformLocation(terrProg, 'uVP'), false, vp);
+    gl.uniform3fv(gl.getUniformLocation(terrProg, 'uSun'), sunDir);
+    gl.uniform3fv(gl.getUniformLocation(terrProg, 'uCam'), camPos);
+    gl.uniform1f(gl.getUniformLocation(terrProg, 'uT'), t);
+    gl.drawElements(gl.TRIANGLES, terrProg.count, gl.UNSIGNED_INT, 0);
+  }
 
   // soft shadow blob under the aircraft
   if (!plane.crashed) {
@@ -931,7 +1140,7 @@ function render(t){
     // spinning prop
     const pr = rotAxis(plane.r, plane.f, plane.propAng);
     const pu = rotAxis(plane.u, plane.f, plane.propAng);
-    drawMesh(propMesh, V.add(plane.pos, V.scale(plane.f, 3.8)), pr, pu, plane.f, vp);
+    drawMesh(propMesh, V.add(plane.pos, V.scale(plane.f, 4.18)), pr, pu, plane.f, vp);
   }
 }
 function drawMesh(mesh, o, r, u, f, vp){

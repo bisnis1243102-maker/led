@@ -35,6 +35,16 @@ flight-path marker, heading tape and stall warning; engine + wind audio;
 keyboard controls on desktop and a virtual stick + throttle on phones.
 Open the file and fly — you start airborne; press R for a runway start.
 
+The aircraft is modeled on a **Cessna 172 Skyhawk** (high wing, struts,
+tricycle gear, 11m span). And press **MAP** (or keys 2/3/4) for **Real
+Earth mode**: the sim streams real elevation (AWS Terrain Tiles) and real
+satellite imagery (Esri World Imagery) — both free, keyless, CORS-open —
+and rebuilds the world as the actual **Matterhorn**, **Grand Canyon**, or
+**Mount Fuji** with true elevations and collision. (Google's
+photorealistic 3D tiles would need your own paid API key, so the sim uses
+these open sources instead.) Real Earth mode needs internet; the
+procedural world works fully offline.
+
 ## Run it
 
 No build step, no install:
