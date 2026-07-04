@@ -22,6 +22,19 @@ permission**: every action shows an Allow / Deny card in the chat first.
 └────────────┴──────────────────────────────┴──────────────────────┘
 ```
 
+## Bonus: AeroWing flight simulator (`flightsim/`)
+
+The repo also includes **AeroWing** — a 3D flight simulator in a single
+self-contained file (`flightsim/index.html`), written from scratch in raw
+WebGL2 with the same rules as everything else: no libraries, no assets,
+no APIs. Procedurally generated mountains, forests, farmland, lakes and
+coastline; terrain self-shadowing, cloud shadows, fresnel water, dual
+cloud layers; a real flight model (lift/drag/stall, banked turns,
+runway takeoffs and landings, crashes); cockpit HUD with pitch ladder,
+flight-path marker, heading tape and stall warning; engine + wind audio;
+keyboard controls on desktop and a virtual stick + throttle on phones.
+Open the file and fly — you start airborne; press R for a runway start.
+
 ## Run it
 
 No build step, no install:
