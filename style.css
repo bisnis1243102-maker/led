@@ -332,6 +332,7 @@ body {
 .perm-btn { font-size: 11.5px; padding: 4px 10px; }
 .perm-btn.deny:hover { border-color: var(--red); color: var(--red); }
 .perm-state { margin-top: 6px; color: var(--dim); font-size: 11.5px; }
+.neural-label { margin-top: 6px; color: var(--dim); font-size: 10.5px; font-style: italic; }
 #chat-form {
   display: flex;
   gap: 6px;

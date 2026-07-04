@@ -78,9 +78,19 @@ how's the loss?                        complete at my cursor
 text classifier built from scratch in `js/nlu.js` (bag-of-words + bigram
 features → softmax regression, trained by SGD on ~300 example phrasings
 in ~50ms when the page loads). It generalizes to phrasings it never saw
-(20/20 on the held-out test set) and extracts file names, quoted text,
+(22/22 on the held-out test set) and extracts file names, quoted text,
 numbers and `code` from your sentence. Free-form *writing* comes from the
-transformer you train yourself. There is no cloud model anywhere.
+transformer. There is no cloud model anywhere.
+
+**The pretrained brain** — say **"load your brain"** (or press ⚡ in the
+Model tab). This loads `models/pretrained.json`: a ~162k-parameter
+transformer pretrained offline by `tools/pretrain.js` on a 42KB corpus of
+dialogue and JavaScript (`tools/make-corpus.js` — every line authored for
+this project, no scraped data, no API). Once loaded, any chat message that
+isn't a recognized command gets a **neural reply**, generated live by the
+transformer in its trained dialogue style and labeled as such. The
+checkpoint uses the same architecture as the "medium" preset, so you can
+keep training it in the browser on your own files.
 
 **The permission system** — the assistant never acts on its own:
 
@@ -127,7 +137,10 @@ node tests/nlu.js         # intent classifier: held-out English phrasings + slot
 
 - The chat's English understanding covers IDE commands (files, running,
   training, generating) — it's an intent classifier, not a general
-  conversationalist. Off-domain questions get a polite "say help".
+  conversationalist. Off-domain messages get a *neural reply* from the
+  transformer: real generation, clearly labeled, charming, and only as
+  smart as ~162k parameters can be. It answers best on topics in its
+  training dialogue (coding terms, itself, the app).
 - The generative model is character-level with tens of thousands of
   parameters — it imitates its training corpus rather than writing new
   programs. Code written *for* you ("a function that adds two numbers")
@@ -139,13 +152,16 @@ node tests/nlu.js         # intent classifier: held-out English phrasings + slot
 ## Repo layout
 
 ```
-index.html        app shell
-style.css         dark IDE theme
-js/nn.js          the neural network engine (the interesting file)
-js/nlu.js         English → intent classifier + slot extraction (from scratch)
-js/agent.js       chat assistant + the Allow/Deny permission system
-js/app.js         IDE logic: editor, tabs, runner, AI panel
-js/corpus.js      starter files + default training corpus
-tests/            gradient check, training test, NLU accuracy test (Node)
-build.js          bundles everything into dist/NeuroIDE.html
+index.html          app shell
+style.css           dark IDE theme
+js/nn.js            the neural network engine (the interesting file)
+js/nlu.js           English → intent classifier + slot extraction (from scratch)
+js/agent.js         chat assistant + the Allow/Deny permission system
+js/app.js           IDE logic: editor, tabs, runner, AI panel
+js/corpus.js        starter files + default training corpus
+models/             pretrained checkpoint + the corpus it was trained on
+tools/make-corpus.js  generates the pretraining corpus (all original text)
+tools/pretrain.js   trains the shipped checkpoint in Node (CPU, no GPU)
+tests/              gradient check, training test, NLU accuracy test (Node)
+build.js            bundles everything (brain included) into dist/NeuroIDE.html
 ```

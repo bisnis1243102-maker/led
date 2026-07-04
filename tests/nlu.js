@@ -31,6 +31,8 @@ const HELD_OUT = [
   ['are you some kind of ai', 'who'],
   ['restore the default project files', 'reset_workspace'],
   ['add a function that subtracts two numbers to math.js', 'write_file'],
+  ['please load your pretrained brain', 'load_pretrained'],
+  ['can you get smarter', 'load_pretrained'],
 ];
 
 let ok = 0;

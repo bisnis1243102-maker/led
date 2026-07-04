@@ -262,8 +262,9 @@
     '          "rename a.js to b.js" · "list files" · "add \'hello\' to notes.md"',
     '          "add a function that adds two numbers to main.js"',
     'Run:      "run main.js" · "run `console.log(1+1)`" · "what is 12 * 7"',
-    'Model:    "train for 1000 steps" · "stop training" · "how\'s the loss?"',
-    '          "write something" · "complete at my cursor" · "reset the model"',
+    'Model:    "load your brain" (pretrained!) · "train for 1000 steps"',
+    '          "write something" · "how\'s the loss?" · "reset the model"',
+    'Chat:     once a model is loaded, anything else gets a neural reply.',
     'Anything that changes files or runs code asks for your permission first.',
   ].join('\n');
 
@@ -440,6 +441,26 @@
       bot('Pick a checkpoint .json file in the dialog.');
     },
 
+    load_pretrained() {
+      const doLoad = () => {
+        bot('Loading my pretrained brain…');
+        AI.loadPretrained((err) => {
+          if (err) { bot('Couldn\'t load it: ' + err.message); return; }
+          bot('⚡ Brain online: ' + AI.model.paramCount().toLocaleString() + ' params, pretrained for ' +
+            AI.steps.toLocaleString() + ' steps on dialogue + code. Now you can just chat with me — ' +
+            'anything I don\'t recognize as a command, my transformer answers itself. ' +
+            'Try "tell me a joke" or "what is a gradient". (You can keep training me on the medium preset.)');
+        });
+      };
+      if (AI.model && AI.steps > 0) {
+        withPermission({
+          type: 'model',
+          title: 'replace the current model (' + AI.steps + ' steps) with the pretrained checkpoint',
+          run: doLoad,
+        });
+      } else doLoad();
+    },
+
     gen_text(nl) {
       let prompt = nl.slots.strs[0] || nl.slots.code[0];
       if (!prompt) {
@@ -474,11 +495,42 @@
     },
 
     unknown(nl, guess) {
+      // No command recognized: let the transformer answer in its own words.
+      if (!guess && AI.model && !AI.generating) { neuralReply(nl.raw); return; }
       let t = 'I didn\'t quite get that.';
       if (guess) t = 'I\'m not sure — did you mean something like "' + guess + '"?';
-      bot(t + ' I understand plain-English commands about files, running code, and the neural net. Say "help" for examples.');
+      bot(t + ' I understand plain-English commands about files, running code, and the neural net' +
+        (AI.model ? '' : ' — and once a model is loaded ("load your brain") I\'ll answer everything else neurally') +
+        '. Say "help" for examples.');
     },
   };
+
+  // Free-chat reply straight from the transformer, prompted in the
+  // dialogue format it was trained on. Stops at the end of the Bot line.
+  function neuralReply(text) {
+    const prompt = 'You: ' + text.trim().slice(0, 120) + '\nBot:';
+    const msg = bot('', '…');
+    const pre = msg.querySelector('.msg-pre');
+    let out = '';
+    let stopped = false;
+    AI.generate(prompt, 140, { temperature: 0.45, topK: 8 }, (ch) => {
+      if (stopped) return false;
+      out += ch;
+      const cut = out.search(/\n(?:You|Bot):|\n\n/);
+      if (cut >= 0) { stopped = true; pre.textContent = out.slice(0, cut).trim() || '…'; scroll(); return false; }
+      pre.textContent = out.trim() || '…';
+      scroll();
+      return true;
+    }, () => {
+      if (!stopped) pre.textContent = (out.split('\n')[0].trim()) || '…';
+      const label = document.createElement('div');
+      label.className = 'neural-label';
+      label.textContent = '🧪 neural reply — my ' + AI.model.paramCount().toLocaleString() +
+        '-param transformer riffing, not a looked-up answer';
+      msg.appendChild(label);
+      scroll();
+    });
+  }
 
   const GUESS_EXAMPLES = {
     create_file: 'create a file called notes.md',
@@ -525,6 +577,14 @@
       handlers.calc(r);
       return;
     }
+    // Purely conversational intents: once a model is loaded, only very
+    // confident matches keep the canned reply — everything else goes to
+    // the transformer, which was trained on far more small talk.
+    const CHATTY = { greet: 1, thanks: 1, who: 1 };
+    if (CHATTY[r.intent] && AI.model && r.confidence < 0.9) {
+      handlers.unknown(r);
+      return;
+    }
     if (r.confidence >= 0.5 && handlers[r.intent]) {
       handlers[r.intent](r);
     } else if (r.confidence >= 0.3 && GUESS_EXAMPLES[r.intent]) {
@@ -555,14 +615,18 @@
 
   // ----------------------------------------------------------------- boot ----
   function welcome(short) {
-    bot('👋 Hi! I\'m NeuroIDE\'s built-in assistant — 100% local, no APIs. I understand English commands and I never touch your files or run code without your permission.');
+    bot('👋 Hi! I\'m NeuroIDE\'s built-in assistant — 100% local, no APIs, no keys. I understand English commands and I never touch your files or run code without your permission.');
     if (!short) {
       bot('Try me:', [
         '“create a file called notes.md”',
         '“add a function that adds two numbers to main.js”',
         '“run main.js”        “what is 12 * 7”',
-        '“train for 1000 steps”   then   “write something”',
+        '“load your brain”   then just chat with me',
       ].join('\n'));
+      if (AI.model) {
+        bot('⚡ My pretrained brain is already loaded (' + AI.steps.toLocaleString() +
+          ' steps) — ask me anything, e.g. "tell me a joke" or "what is a gradient".');
+      }
     }
   }
 

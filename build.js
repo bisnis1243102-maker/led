@@ -9,7 +9,17 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 let html = read('index.html');
 const css = read('style.css');
-const scripts = ['js/nn.js', 'js/corpus.js', 'js/nlu.js', 'js/app.js', 'js/agent.js'].map(read).join('\n;\n');
+// Embed the pretrained checkpoint (if built) so the single file ships with
+// a working brain and needs no fetch — works from file:// too.
+let pretrained = '';
+try {
+  pretrained = ';\nwindow.NEURO_PRETRAINED = ' + read('models/pretrained.json') + ';\n';
+  console.log('embedding models/pretrained.json');
+} catch (e) {
+  console.log('no models/pretrained.json — building without an embedded brain');
+}
+const scripts = [read('js/nn.js'), read('js/corpus.js'), pretrained,
+  read('js/nlu.js'), read('js/app.js'), read('js/agent.js')].join('\n;\n');
 
 html = html.replace('<link rel="stylesheet" href="style.css">',
   '<style>\n' + css + '\n</style>');

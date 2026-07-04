@@ -529,7 +529,7 @@
     },
 
     refreshInfo() {
-      const p = PRESETS[$('ai-preset').value];
+      const p = this.model ? this.model.cfg : PRESETS[$('ai-preset').value];
       const arch = p.nLayer + '-layer transformer · ' + p.nHead + ' heads · ' +
         p.nEmbd + '-d · ctx ' + p.blockSize;
       $('ai-arch').textContent = this.model
@@ -550,13 +550,37 @@
         while (i < maxNew && performance.now() - t0 < 24) {
           const t = NN.nextToken(this.model, ctx, opts);
           ctx.push(t);
-          onChar(this.tok.chars[t]);
+          const keep = onChar(this.tok.chars[t]);
           i++;
+          if (keep === false) i = maxNew; // caller asked to stop early
         }
         if (i < maxNew) setTimeout(step, 0);
         else { this.generating = false; if (onDone) onDone(true); }
       };
       step();
+    },
+
+    // Load the shipped pretrained checkpoint: embedded in the single-file
+    // build as window.NEURO_PRETRAINED, otherwise fetched from models/.
+    loadPretrained(done) {
+      const apply = (obj) => {
+        try {
+          this.loadCheckpoint(obj);
+          // the checkpoint is the "medium" architecture — align the preset
+          // so continued training uses matching batch size / learning rate
+          $('ai-preset').value = 'medium';
+          this.refreshInfo();
+          if (done) done(null);
+        } catch (e) { if (done) done(e); }
+      };
+      if (window.NEURO_PRETRAINED) { apply(window.NEURO_PRETRAINED); return; }
+      fetch('models/pretrained.json')
+        .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(apply)
+        .catch((e) => {
+          if (done) done(new Error(e.message +
+            ' — serve the app over http (or use dist/NeuroIDE.html, which embeds the brain)'));
+        });
     },
 
     completeAtCursor() {
@@ -662,6 +686,14 @@
     logSys('model checkpoint downloaded');
   });
 
+  $('btn-pretrained').addEventListener('click', () => {
+    logSys('loading pretrained checkpoint…');
+    AI.loadPretrained((err) => {
+      if (err) logSys('pretrained load failed: ' + err.message);
+      else logSys('⚡ pretrained brain ready — try Generate or chat');
+    });
+  });
+
   $('btn-load-model').addEventListener('click', () => $('model-file').click());
   $('model-file').addEventListener('change', (e) => {
     const f = e.target.files[0];
@@ -738,6 +770,10 @@
   renderFileList();
   renderTabs();
   if (activeFile) openFile(activeFile);
+  if (window.NEURO_PRETRAINED && !AI.model) {
+    try { AI.loadCheckpoint(window.NEURO_PRETRAINED); logSys('⚡ pretrained brain auto-loaded (embedded in this build)'); }
+    catch (e) { logSys('embedded checkpoint failed to load: ' + e.message); }
+  }
   AI.refreshInfo();
   drawChart();
   logSys('NeuroIDE ready — the neural net in js/nn.js is yours: no APIs, no libraries.');

@@ -21,6 +21,10 @@ The 💬 **Chat** tab on the right understands plain English:
 - "create a file called notes.md"
 - "add a function that adds two numbers to main.js"
 - "run main.js" · "what is 12 * 7"
+- "load your brain" — loads the shipped **pretrained** transformer
+  (trained offline on dialogue + code; no downloads from any API)
+- then just chat: "tell me a joke", "what is a gradient" — commands are
+  handled by the intent parser, everything else gets a neural reply
 - "train for 1000 steps", then "write something"
 
 Anything that **edits files or runs code asks for your permission
