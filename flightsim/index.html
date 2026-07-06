@@ -52,10 +52,11 @@
 <canvas id="hud"></canvas>
 <div id="msg" class="banner"></div>
 <div id="topbar">AEROWING · flight simulator · no libraries, no keys</div>
-<div id="help">↑↓ pitch · ←→ roll · A/D rudder · W/S throttle · B brake · C camera · R reset · P pause · M mute · 1-4 map (2 Alps · 3 Grand Canyon · 4 Fuji)</div>
+<div id="help">↑↓ pitch · ←→ roll · A/D rudder · W/S throttle · B brake · V plane · C camera · R reset · P pause · M mute · 1-4 map (2 Alps · 3 Canyon · 4 Fuji)</div>
 <div id="btn-cam" class="tbtn">CAM</div>
 <div id="btn-map" class="tbtn" style="top:12px;right:88px;">MAP</div>
 <div id="btn-reset" class="tbtn">RESET</div>
+<div id="btn-plane" class="tbtn" style="top:12px;left:96px;">✈ Boeing 737</div>
 <div id="stick"><div class="knob"></div></div>
 <div id="throt"><div class="knob"></div></div>
 <script>
@@ -337,19 +338,33 @@ out vec3 vPos; out vec3 vNor; out vec2 vUV;
 void main(){ vPos = aPos; vNor = aNor; vUV = aUV; gl_Position = uVP * vec4(aPos, 1.0); }`;
 const realFS = COMMON + `
 uniform vec3 uSun; uniform vec3 uCam; uniform float uT;
-uniform sampler2D uSat;
+uniform sampler2D uSat; uniform sampler2D uDet;
+uniform vec4 uDetBox; uniform float uHasDet;
 in vec3 vPos; in vec3 vNor; in vec2 vUV;
 out vec4 fragColor;
 void main(){
   vec3 base = texture(uSat, vUV).rgb;
-  base = pow(base, vec3(0.92)) * 1.06;                 // gentle lift
+  if (uHasDet > 0.5) {
+    vec2 duv = (vUV - uDetBox.xy) * uDetBox.zw;
+    vec2 m = min(duv, 1.0 - duv);
+    float edge = clamp(min(m.x, m.y) * 14.0, 0.0, 1.0);
+    if (edge > 0.0) base = mix(base, texture(uDet, clamp(duv, 0.0, 1.0)).rgb, edge);
+  }
+  // micro-texture so low passes don't look like a blurred poster
+  float micro = vnoise(vPos.xz * 0.85) * 0.6 + vnoise(vPos.xz * 0.11) * 0.4;
+  base *= 0.90 + 0.20 * micro;
+  // saturation + contrast lift (satellite jpgs are washed out)
+  float lum = dot(base, vec3(0.299, 0.587, 0.114));
+  base = clamp(lum + (base - lum) * 1.3, 0.0, 1.0);
+  base = pow(base, vec3(0.90)) * 1.07;
   vec3 n = normalize(vNor);
+  n = normalize(n + vec3(vnoise(vPos.xz * 0.05) - 0.5, 0.0, vnoise(vPos.xz * 0.05 + 7.0) - 0.5) * 0.10);
   float diff = max(dot(n, uSun), 0.0);
   float cloudShadow = 1.0 - 0.38 * cloudDen(vPos.xz - uSun.xz * 1500.0, uT);
-  vec3 lit = base * (0.52 + 0.75 * diff) * cloudShadow;
+  vec3 lit = base * (0.40 + 1.0 * diff) * cloudShadow;
   float dist = length(vPos - uCam);
   vec3 rd = normalize(vPos - uCam);
-  float fog = 1.0 - exp(-pow(dist * 0.000115, 1.4));
+  float fog = 1.0 - exp(-pow(dist * 0.00013, 1.4));
   lit = mix(lit, skyCol(rd, uSun) * 0.98, fog);
   fragColor = vec4(toneMap(lit), 1.0);
 }`;
@@ -397,7 +412,7 @@ gl.bindBuffer(gl.ARRAY_BUFFER, skyProg.vbo);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
 
 // aircraft: Cessna 172 Skyhawk proportions (len 8.3m, span 11m, high wing)
-function buildPlane(){
+function buildC172(){
   const P = [], N = [], C = [];
   function quad(a,b,c,d,col){
     const n = V.norm(V.cross(V.sub(b,a), V.sub(c,a)));
@@ -514,7 +529,139 @@ function upload(mesh){
   mesh.vc = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vc);
   gl.bufferData(gl.ARRAY_BUFFER, mesh.col, gl.STATIC_DRAW);
 }
-const planeMesh = buildPlane(); upload(planeMesh);
+// Boeing 737-800 proportions: length 39.5m, span 35.8m, low swept wing,
+// two underwing turbofans, winglets, blue/white livery.
+function buildB737(){
+  const P = [], N = [], C = [];
+  function quad(a,b,c,d,col){
+    const n = V.norm(V.cross(V.sub(b,a), V.sub(c,a)));
+    for (const v of [a,b,c, a,c,d]) { P.push(...v); N.push(...n); C.push(...col); }
+  }
+  function quad2(a,b,c,d,col){ quad(a,b,c,d,col); quad(d,c,b,a,col); }
+  const white=[0.95,0.96,0.97], belly=[0.66,0.69,0.74], blue=[0.06,0.20,0.48],
+        glass=[0.07,0.10,0.16], eng=[0.55,0.58,0.63], dark=[0.12,0.13,0.16];
+  // fuselage loft: [z, radius, yCenter]
+  const st = [
+    [ 19.7, 0.22, -0.55],
+    [ 18.3, 1.02, -0.22],
+    [ 16.4, 1.62,  0.00],
+    [ 13.5, 1.88,  0.00],
+    [ -8.0, 1.88,  0.00],
+    [-14.5, 1.42,  0.55],
+    [-18.3, 0.72,  1.15],
+    [-19.8, 0.26,  1.50],
+  ];
+  const SEG = 12;
+  const ring = (i) => {
+    const [z, r, yc] = st[i], pts = [];
+    for (let k = 0; k < SEG; k++) {
+      const a = (k / SEG) * Math.PI * 2 + Math.PI / SEG;
+      pts.push([Math.cos(a) * r, yc + Math.sin(a) * r, z]);
+    }
+    return pts;
+  };
+  for (let i = 0; i < st.length - 1; i++) {
+    const A = ring(i), B = ring(i + 1);
+    for (let k = 0; k < SEG; k++) {
+      const k2 = (k + 1) % SEG;
+      const midY = (A[k][1] + A[k2][1] + B[k][1] + B[k2][1]) / 4 - st[i][2];
+      quad(A[k], A[k2], B[k2], B[k], midY > -st[i][1] * 0.35 ? white : belly);
+    }
+  }
+  const T = ring(st.length - 1);
+  for (let k = 1; k < SEG - 1; k++) quad(T[0], T[k+1], T[k], T[k], white);
+  // window line + blue cheat line + cockpit windows
+  quad([1.93,0.85,14.0],[1.93,0.85,-9.0],[1.90,1.25,-9.0],[1.90,1.25,14.0], glass);
+  quad([-1.93,0.85,-9.0],[-1.93,0.85,14.0],[-1.90,1.25,14.0],[-1.90,1.25,-9.0], glass);
+  quad([1.94,-0.35,15.5],[1.94,-0.35,-12.0],[1.92,0.25,-12.5],[1.92,0.25,15.8], blue);
+  quad([-1.94,-0.35,-12.0],[-1.94,-0.35,15.5],[-1.92,0.25,15.8],[-1.92,0.25,-12.5], blue);
+  quad([1.35,0.45,16.2],[1.35,0.45,17.6],[0.75,1.05,17.9],[0.95,1.05,16.4], glass);
+  quad([-1.35,0.45,17.6],[-1.35,0.45,16.2],[-0.95,1.05,16.4],[-0.75,1.05,17.9], glass);
+  quad([-0.85,0.55,17.9],[0.85,0.55,17.9],[0.62,1.05,18.0],[-0.62,1.05,18.0], glass);
+  // swept wing with winglet
+  function wing(sd){
+    const rL=[sd*1.85,-1.05, 2.6], rT=[sd*1.85,-1.05,-5.1];
+    const tL=[sd*17.9, 0.75,-5.0], tT=[sd*17.9, 0.75,-6.4];
+    const th=(p,t)=>[p[0],p[1]+t,p[2]];
+    const rt=0.55, tt=0.12;
+    if (sd > 0) {
+      quad(th(rL,rt), th(tL,tt), th(tT,tt), th(rT,rt), white);
+      quad(th(rT,0), th(tT,0), th(tL,0), th(rL,0), belly);
+      quad(th(rL,0), th(tL,0), th(tL,tt), th(rL,rt), white);
+      quad(th(rT,rt), th(tT,tt), th(tT,0), th(rT,0), belly);
+    } else {
+      quad(th(rT,rt), th(tT,tt), th(tL,tt), th(rL,rt), white);
+      quad(th(rL,0), th(tL,0), th(tT,0), th(rT,0), belly);
+      quad(th(tL,0), th(rL,0), th(rL,rt), th(tL,tt), white);
+      quad(th(rT,0), th(tT,0), th(tT,tt), th(rT,rt), belly);
+    }
+    // winglet (blue)
+    quad2([sd*17.9,0.80,-5.0],[sd*18.35,3.10,-5.9],[sd*18.35,3.10,-6.55],[sd*17.9,0.80,-6.4], blue);
+    // engine nacelle + pylon
+    const ex = sd*5.7, ey=-2.45;
+    const ES = 8;
+    for (let k = 0; k < ES; k++) {
+      const a1=(k/ES)*Math.PI*2, a2=((k+1)/ES)*Math.PI*2;
+      const p1=[ex+Math.cos(a1)*1.08, ey+Math.sin(a1)*1.08], p2=[ex+Math.cos(a2)*1.08, ey+Math.sin(a2)*1.08];
+      quad([p1[0],p1[1],2.7],[p2[0],p2[1],2.7],[p2[0],p2[1],-1.5],[p1[0],p1[1],-1.5], eng);
+      quad([p1[0]*0.998,p1[1],2.71],[p2[0]*0.998,p2[1],2.71],[ex,ey,2.71],[ex,ey,2.71], dark); // inlet
+    }
+    quad2([ex-0.15,ey+0.8,1.8],[ex-0.15,-1.05,0.8],[ex+0.15,-1.05,0.8],[ex+0.15,ey+0.8,1.8], white); // pylon
+  }
+  wing(1); wing(-1);
+  // horizontal stabilizer (swept)
+  function stab(sd){
+    const rL=[sd*0.4,0.45,-15.6], rT=[sd*0.4,0.45,-19.4];
+    const tL=[sd*7.2,1.15,-18.7], tT=[sd*7.2,1.15,-19.8];
+    const th=(p,t)=>[p[0],p[1]+t,p[2]];
+    if (sd>0){ quad(th(rL,0.22), th(tL,0.08), th(tT,0.08), th(rT,0.22), white);
+      quad(th(rT,0), th(tT,0), th(tL,0), th(rL,0), belly); }
+    else { quad(th(rT,0.22), th(tT,0.08), th(tL,0.08), th(rL,0.22), white);
+      quad(th(rL,0), th(tL,0), th(tT,0), th(rT,0), belly); }
+  }
+  stab(1); stab(-1);
+  // fin (blue, swept)
+  quad2([0.12,1.2,-13.6],[0.12,1.2,-19.6],[0.10,9.0,-20.4],[0.10,9.0,-17.8], blue);
+  quad2([-0.12,1.2,-19.6],[-0.12,1.2,-13.6],[-0.10,9.0,-17.8],[-0.10,9.0,-20.4], blue);
+  quad([-0.10,9.0,-17.8],[0.10,9.0,-17.8],[0.10,9.0,-20.4],[-0.10,9.0,-20.4], blue);
+  // gear hints
+  const box=(cx,cy,cz,sx,sy,sz,col)=>{
+    const x0=cx-sx/2,x1=cx+sx/2,y0=cy-sy/2,y1=cy+sy/2,z0=cz-sz/2,z1=cz+sz/2;
+    quad([x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1],col);
+    quad([x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0],col);
+    quad([x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0],col);
+    quad([x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],col);
+    quad([x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1],col);
+  };
+  box(0,-2.6,14.5,0.3,1.6,0.3,dark); box(0,-3.35,14.5,0.4,0.7,0.7,dark);
+  box(-3.6,-2.7,-1.2,0.35,1.7,0.35,dark); box(-3.6,-3.4,-1.2,0.5,0.8,1.6,dark);
+  box(3.6,-2.7,-1.2,0.35,1.7,0.35,dark); box(3.6,-3.4,-1.2,0.5,0.8,1.6,dark);
+  return { pos: new Float32Array(P), nor: new Float32Array(N), col: new Float32Array(C), n: P.length/3 };
+}
+
+// ------------------------------------------------------ aircraft configs
+const AIRCRAFT = [
+  { id: 'b737', name: 'Boeing 737-800', mesh: null,
+    mass: 62000, S: 125, Tmax: 230000, vRef: 270, CL0: 0.25, CLa: 5.2,
+    aStall: 0.28, CD0: 0.024, kInd: 0.045, rateP: 0.45, rateR: 0.65, rateY: 0.25,
+    effV: 95, gearH: 3.35, vRot: 68, camD: 72, camH: 22, cockpit: [2.3, 16.5],
+    shadow: 20, prop: false, cruise: 150, propZ: 0 },
+  { id: 'c172', name: 'Cessna 172 Skyhawk', mesh: null,
+    mass: 1100, S: 16, Tmax: 9500, vRef: 95, CL0: 0.35, CLa: 4.8,
+    aStall: 0.30, CD0: 0.032, kInd: 0.055, rateP: 0.9, rateR: 1.25, rateY: 0.5,
+    effV: 55, gearH: 1.15, vRot: 28, camD: 16, camH: 5, cockpit: [0.55, 1.2],
+    shadow: 6.5, prop: true, cruise: 55, propZ: 4.18 },
+];
+let acIdx = 0;
+let AC = AIRCRAFT[0];
+AIRCRAFT[0].mesh = buildB737(); upload(AIRCRAFT[0].mesh);
+AIRCRAFT[1].mesh = buildC172(); upload(AIRCRAFT[1].mesh);
+function setAircraft(i){
+  acIdx = i % AIRCRAFT.length;
+  AC = AIRCRAFT[acIdx];
+  document.getElementById('btn-plane').textContent = '✈ ' + AC.name.split(' ')[0] + ' ' + (AC.name.split(' ')[1] || '');
+  resetPlane(true);
+}
 const propMesh = buildProp(); upload(propMesh);
 
 // JS copy of the terrain height function (must match GLSL H())
@@ -593,7 +740,9 @@ async function loadRegion(idx){
   const [cx, cy] = lonLatToTile(R.lat, R.lon, ZE);
   const metersPerTile = 40075016.686 * Math.cos(R.lat * Math.PI / 180) / (2 ** ZE);
   const mpp = metersPerTile / 256;      // ~53 m/px elevation, imagery 4x finer
-  let done = 0; const total = 9 + 144;
+  const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+  const wantDet = maxTex >= 4096;
+  let done = 0; const total = 9 + 144 + (wantDet ? 256 : 0);
   const prog = () => banner('Loading ' + R.name + '\n' + done + ' / ' + total + ' tiles');
   prog();
 
@@ -621,8 +770,33 @@ async function loadRegion(idx){
       .then(im => { iCtx.drawImage(im, i*256, j*256); done++; if (done % 12 === 0) prog(); })
   ))));
 
-  // mesh: 385x385 vertices over the 40km square
-  const N = 385, HM = 768;
+  // detail imagery: 16x16 z15 tiles (~4x sharper) around the landmark
+  let detTex = null, detBox = null;
+  if (wantDet) {
+    const c15 = lonLatToTile(R.lat, R.lon, 15);
+    const bx15 = c15[0] - 8, by15 = c15[1] - 8;
+    const dCan = document.createElement('canvas');
+    dCan.width = dCan.height = 4096;
+    const dCtx = dCan.getContext('2d');
+    try {
+      await Promise.all([].concat(...Array.from({length:16}, (_, j) => Array.from({length:16}, (_, i) =>
+        loadImg('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/15/' + (by15+j) + '/' + (bx15+i))
+          .then(im => { dCtx.drawImage(im, i*256, j*256); done++; if (done % 16 === 0) prog(); })
+      ))));
+      detTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, detTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, dCan);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      // where the z15 block sits inside the full-atlas UV space
+      const west15 = (cx - 1) * 16, north15 = (cy - 1) * 16;
+      detBox = [(bx15 - west15) / 48, (by15 - north15) / 48, 48 / 16, 48 / 16];
+    } catch (e) { detTex = null; } // detail is optional — fly on base imagery
+  }
+
+  // mesh: 513x513 vertices over the 40km square
+  const N = 513, HM = 768;
   const sample = (fx, fy) => { // bilinear in heightmap pixel space
     fx = Math.max(0, Math.min(HM - 1.001, fx)); fy = Math.max(0, Math.min(HM - 1.001, fy));
     const x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0;
@@ -669,6 +843,7 @@ async function loadRegion(idx){
     hmap, mpp, half, HM, sample,
     vp: mkBuf(pos), vn: mkBuf(nor), vt: mkBuf(uv),
     ibo: mkBuf(idxA, gl.ELEMENT_ARRAY_BUFFER), count: idxA.length, tex,
+    detTex, detBox,
   };
 }
 
@@ -714,11 +889,11 @@ function resetPlane(air){
     const f = [Math.sin(hRad), 0, Math.cos(hRad)];
     plane.pos = [0, realHeight(0, 0) + (R.agl || 1200), 0];
     plane.r = V.norm(V.cross([0,1,0], f)); plane.u = [0,1,0]; plane.f = f;
-    plane.vel = V.scale(f, 55);
+    plane.vel = V.scale(f, AC.cruise);
   } else {
-    plane.pos = air ? [0, 500, 800] : [0, groundAt(0, -1180) + 1.15, -1180];
+    plane.pos = air ? [0, 500, 800] : [0, groundAt(0, -1180) + AC.gearH, -1180];
     plane.r = [1,0,0]; plane.u = [0,1,0]; plane.f = [0,0,1];
-    plane.vel = air ? [0, 0, 55] : [0,0,0];
+    plane.vel = air ? [0, 0, AC.cruise] : [0,0,0];
   }
   plane.throttle = air ? 0.75 : 0;
   plane.onGround = !air;
@@ -737,21 +912,21 @@ function stepPhysics(dt){
   const vhat = speed > 0.1 ? V.scale(p.vel, 1/speed) : p.f;
   const rho = 1.225 * Math.exp(-p.pos[1] / 9000);
   const q = 0.5 * rho * speed * speed;
-  const S = 16;
+  const S = AC.S;
 
   // local flow angles
   const vl = [V.dot(p.vel, p.r), V.dot(p.vel, p.u), V.dot(p.vel, p.f)];
   const aoa = Math.atan2(-vl[1], Math.max(vl[2], 1)); // radians
 
   // aerodynamic coefficients (with stall)
-  const aStall = 0.30;
-  let CL = 0.35 + 4.8 * aoa;
+  const aStall = AC.aStall;
+  let CL = AC.CL0 + AC.CLa * aoa;
   if (aoa > aStall) CL = Math.max(0.2, CL - (aoa - aStall) * 7);
   if (aoa < -aStall) CL = Math.min(-0.2, CL + (-aoa - aStall) * 7);
-  const CD = 0.032 + 0.055 * CL * CL;
+  const CD = AC.CD0 + AC.kInd * CL * CL;
 
-  const mass = 1100;
-  const thrust = p.throttle * 9500 * (1 - 0.4 * speed / 95);
+  const mass = AC.mass;
+  const thrust = p.throttle * AC.Tmax * (1 - 0.35 * speed / AC.vRef);
   const liftDir = V.norm(V.sub(p.u, V.scale(vhat, V.dot(p.u, vhat))));
   let force = V.scale(p.f, thrust);
   force = V.add(force, V.scale(liftDir, q * S * CL));
@@ -759,7 +934,7 @@ function stepPhysics(dt){
   force = V.add(force, [0, -9.81 * mass, 0]);
 
   // ground interaction
-  const gY = groundAt(p.pos[0], p.pos[2]) + 1.15;
+  const gY = groundAt(p.pos[0], p.pos[2]) + AC.gearH;
   if (p.onGround) {
     if (p.pos[1] <= gY + 0.05) {
       p.pos[1] = gY;
@@ -773,7 +948,7 @@ function stepPhysics(dt){
       p.f = V.norm(rotAxis(p.f, [0,1,0], steer * dt));
       p.r = V.norm(V.cross([0,1,0], p.f));
       p.u = V.norm(V.cross(p.f, p.r));
-      if (speed > 28 && input.pitch > 0.15) p.onGround = false; // rotate!
+      if (speed > AC.vRot && input.pitch > 0.15) p.onGround = false; // rotate!
     } else p.onGround = false;
   }
 
@@ -783,10 +958,10 @@ function stepPhysics(dt){
 
   if (!p.onGround) {
     // control effectiveness grows with airspeed
-    const eff = Math.min(speed / 55, 1.4);
-    const pr = input.pitch * 0.9 * eff;
-    const rr = input.roll * 1.25 * eff;
-    const yr = input.yaw * 0.5 * eff;
+    const eff = Math.min(speed / AC.effV, 1.4);
+    const pr = input.pitch * AC.rateP * eff;
+    const rr = input.roll * AC.rateR * eff;
+    const yr = input.yaw * AC.rateY * eff;
     p.f = rotAxis(p.f, p.r, -pr * dt); p.u = rotAxis(p.u, p.r, -pr * dt);
     p.r = rotAxis(p.r, p.f, -rr * dt); p.u = rotAxis(p.u, p.f, -rr * dt);
     p.f = rotAxis(p.f, p.u, yr * dt); p.r = rotAxis(p.r, p.u, yr * dt);
@@ -830,6 +1005,7 @@ addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'p') paused = !paused;
   if (e.key.toLowerCase() === 'm') muted = !muted;
   if (e.key >= '1' && e.key <= '4') setWorld(parseInt(e.key, 10) - 1);
+  if (e.key.toLowerCase() === 'v') setAircraft(acIdx + 1);
   startAudio();
 });
 addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
@@ -898,8 +1074,8 @@ function startAudio(){
 function updateAudio(){
   if (!actx) return;
   const t = plane.throttle, s = plane.speed || 0;
-  engineOsc.frequency.value = 42 + t * 76;
-  engineGain.gain.value = muted || plane.crashed ? 0 : 0.028 + t * 0.075;
+  engineOsc.frequency.value = AC.prop ? 42 + t * 76 : 24 + t * 34;
+  engineGain.gain.value = muted || plane.crashed ? 0 : (AC.prop ? 0.028 + t * 0.075 : 0.02 + t * 0.1);
   windGain.gain.value = muted ? 0 : Math.min(s / 90, 1) * 0.14;
 }
 
@@ -921,7 +1097,7 @@ function drawHUD(){
   const p = plane;
   const speedKt = (p.speed||0) * 1.944;
   const altFt = p.pos[1] * 3.281;
-  const aglFt = (p.pos[1] - (p.gY||0) + 1.15) * 3.281;
+  const aglFt = (p.pos[1] - (p.gY||0) + AC.gearH) * 3.281;
   const hdg = ((Math.atan2(p.f[0], p.f[2]) * 180/Math.PI) + 360) % 360;
   const pitchDeg = Math.asin(Math.max(-1,Math.min(1,p.f[1]))) * 180/Math.PI;
   const rollDeg = Math.atan2(p.r[1], p.u[1]) * 180/Math.PI;
@@ -1000,7 +1176,7 @@ function drawHUD(){
   if (p.onGround) hctx.fillText(speedKt > 5 ? 'ROLLING' : 'ON GROUND — W = throttle up', 50*s, cy + 24*s);
 
   // stall warning
-  if (!p.onGround && (p.aoa||0) > 0.27 && (p.speed||0) > 10) {
+  if (!p.onGround && (p.aoa||0) > AC.aStall - 0.03 && (p.speed||0) > 10) {
     hctx.fillStyle = (performance.now()/250|0)%2 ? 'rgba(255,90,80,1)' : 'rgba(255,200,80,1)';
     hctx.font = `bold ${22*s}px Consolas, monospace`;
     hctx.textAlign = 'center';
@@ -1029,18 +1205,18 @@ const sunDir = V.norm([0.52, 0.30, 0.42]);
 function updateCamera(dt){
   const p = plane;
   if (camMode === 0) { // chase
-    const want = V.add(p.pos, V.add(V.scale(p.f, -16), [0, 5.0, 0]));
+    const want = V.add(p.pos, V.add(V.scale(p.f, -AC.camD), [0, AC.camH, 0]));
     const k = 1 - Math.exp(-dt * 4.5);
     camPos = V.lerp(camPos, want, k);
     // keep camera above terrain
     const g = groundAt(camPos[0], camPos[2]) + 2.0;
     if (camPos[1] < g) camPos[1] = g;
-    camF = V.norm(V.sub(V.add(p.pos, V.scale(p.f, 6)), camPos));
+    camF = V.norm(V.sub(V.add(p.pos, V.scale(p.f, AC.camD * 0.35)), camPos));
     const upHint = V.norm(V.lerp([0,1,0], p.u, 0.35));
     camR = V.norm(V.cross(upHint, camF));
     camU = V.norm(V.cross(camF, camR));
   } else { // cockpit
-    camPos = V.add(p.pos, V.add(V.scale(p.u, 0.55), V.scale(p.f, 1.2)));
+    camPos = V.add(p.pos, V.add(V.scale(p.u, AC.cockpit[0]), V.scale(p.f, AC.cockpit[1])));
     camR = p.r; camU = p.u; camF = p.f;
   }
 }
@@ -1090,6 +1266,12 @@ function render(t){
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, RC.tex);
     gl.uniform1i(gl.getUniformLocation(realProg, 'uSat'), 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, RC.detTex || RC.tex);
+    gl.uniform1i(gl.getUniformLocation(realProg, 'uDet'), 1);
+    gl.uniform1f(gl.getUniformLocation(realProg, 'uHasDet'), RC.detTex ? 1 : 0);
+    gl.uniform4fv(gl.getUniformLocation(realProg, 'uDetBox'), RC.detBox || [0,0,1,1]);
+    gl.activeTexture(gl.TEXTURE0);
     gl.uniformMatrix4fv(gl.getUniformLocation(realProg, 'uVP'), false, vp);
     gl.uniform3fv(gl.getUniformLocation(realProg, 'uSun'), sunDir);
     gl.uniform3fv(gl.getUniformLocation(realProg, 'uCam'), camPos);
@@ -1113,9 +1295,9 @@ function render(t){
 
   // soft shadow blob under the aircraft
   if (!plane.crashed) {
-    const gy = plane.gY !== undefined ? plane.gY - 1.15 : groundAt(plane.pos[0], plane.pos[2]);
+    const gy = plane.gY !== undefined ? plane.gY - AC.gearH : groundAt(plane.pos[0], plane.pos[2]);
     const agl = plane.pos[1] - gy;
-    const alpha = Math.max(0, 0.5 * (1 - agl / 90));
+    const alpha = Math.max(0, 0.5 * (1 - agl / (AC.shadow * 14)));
     if (alpha > 0.01) {
       gl.useProgram(shadProg);
       gl.enable(gl.BLEND);
@@ -1126,7 +1308,7 @@ function render(t){
       gl.enableVertexAttribArray(l2);
       gl.vertexAttribPointer(l2, 2, gl.FLOAT, false, 0, 0);
       gl.uniform3f(gl.getUniformLocation(shadProg, 'uC'), plane.pos[0], gy + 0.4, plane.pos[2]);
-      gl.uniform1f(gl.getUniformLocation(shadProg, 'uS'), 6.5 + agl * 0.06);
+      gl.uniform1f(gl.getUniformLocation(shadProg, 'uS'), AC.shadow + agl * 0.06);
       gl.uniform1f(gl.getUniformLocation(shadProg, 'uA'), alpha);
       gl.uniformMatrix4fv(gl.getUniformLocation(shadProg, 'uVP'), false, vp);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -1136,11 +1318,12 @@ function render(t){
   }
   // aircraft (skip fuselage in cockpit view)
   if (camMode === 0 && !plane.crashed) {
-    drawMesh(planeMesh, plane.pos, plane.r, plane.u, plane.f, vp);
-    // spinning prop
-    const pr = rotAxis(plane.r, plane.f, plane.propAng);
-    const pu = rotAxis(plane.u, plane.f, plane.propAng);
-    drawMesh(propMesh, V.add(plane.pos, V.scale(plane.f, 4.18)), pr, pu, plane.f, vp);
+    drawMesh(AC.mesh, plane.pos, plane.r, plane.u, plane.f, vp);
+    if (AC.prop) {
+      const pr = rotAxis(plane.r, plane.f, plane.propAng);
+      const pu = rotAxis(plane.u, plane.f, plane.propAng);
+      drawMesh(propMesh, V.add(plane.pos, V.scale(plane.f, AC.propZ)), pr, pu, plane.f, vp);
+    }
   }
 }
 function drawMesh(mesh, o, r, u, f, vp){
@@ -1163,7 +1346,8 @@ function drawMesh(mesh, o, r, u, f, vp){
 }
 
 // ================================================================ loop ===
-resetPlane(true); // start airborne so it's instantly fun; R for runway start
+document.getElementById('btn-plane').addEventListener('click', () => setAircraft(acIdx + 1));
+setAircraft(0); // Boeing 737 by default; V switches to the Cessna
 let last = performance.now();
 function frame(now){
   const dt = Math.min((now - last) / 1000, 0.05);
