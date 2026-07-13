@@ -23,7 +23,23 @@ OFFSETS = {
     "script_context_resume": 0x00000000,
     "print_hook":            0x00000000,
     "identity_check":        0x00000000,
+    "luau_compile":          0x00000000,  # bundled compiler entry
 }
+
+# Luau lua_State / global_State struct field offsets. These are compiler-
+# dependent (Roblox builds Luau with -Os arm64e) — verify per release by
+# cross-referencing lua_pcall's prologue register saves and getnamecallmethod
+# targets.
+STRUCT = {
+    "lua_State.namecall":        0x60,  # TString* current namecall method
+    "lua_State.global":          0x18,  # global_State*
+    "global_State.strt":         0x00,  # string table (for GC walk seed)
+    "global_State.allgcopages":  0x40,  # linked list of GC object pages
+    "GCO.next":                  0x00,  # generic GCObject next ptr
+    "GCO.tt":                    0x08,  # type tag
+    "TString.data":              0x18,  # char[] payload
+}
+
 
 # Byte-signatures (AOB) for auto-recovery when the client is repacked.
 # Wildcards use '??'. Hits are validated against xref counts.

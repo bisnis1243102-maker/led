@@ -26,6 +26,14 @@ struct RobloxOffsets {
 
 extern struct RobloxOffsets g_off;
 
+// Luau internal struct offsets — consumed by executor_lib.mm
+extern uintptr_t g_off_lua_state_namecall;
+extern uintptr_t g_off_lua_state_global;
+extern uintptr_t g_off_global_allgcopages;
+extern uintptr_t g_off_gco_next;
+extern uintptr_t g_off_gco_tt;
+extern uintptr_t g_off_tstring_data;
+
 void mod_init(void* image_base);
 void mod_install_lua_bridge(void);
 void mod_install_render_overlay(void);

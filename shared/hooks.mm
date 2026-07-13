@@ -13,6 +13,13 @@
 #include "hooks.h"
 
 struct RobloxOffsets g_off;
+uintptr_t g_off_lua_state_namecall   = 0x60;
+uintptr_t g_off_lua_state_global     = 0x18;
+uintptr_t g_off_global_allgcopages   = 0x40;
+uintptr_t g_off_gco_next             = 0x00;
+uintptr_t g_off_gco_tt               = 0x08;
+uintptr_t g_off_tstring_data         = 0x18;
+
 static uintptr_t g_slide = 0;
 static void* g_image = NULL;
 
@@ -148,46 +155,95 @@ void mod_install_noclip(void)      { g_noclip = true; }
 void mod_install_fly(void)         { g_fly    = true; }
 
 // -- render overlay (UIKit; injected menu) ------------------------------------
-@interface RBXModOverlay : UIView <UITextViewDelegate>
+@interface RBXModOverlay : UIView <UITextViewDelegate, UITableViewDataSource, UITableViewDelegate>
 @property (nonatomic, strong) UITextView* editor;
 @property (nonatomic, strong) UIButton* run;
+@property (nonatomic, strong) UIButton* save;
+@property (nonatomic, strong) UIButton* clear;
+@property (nonatomic, strong) UIButton* min;
+@property (nonatomic, strong) UIButton* scripts;
 @property (nonatomic, strong) UISwitch* flySw;
 @property (nonatomic, strong) UISwitch* noclipSw;
 @property (nonatomic, strong) UISlider* wsSlider;
+@property (nonatomic, strong) UILabel* wsLabel;
+@property (nonatomic, strong) UITableView* scriptList;
+@property (nonatomic, strong) NSMutableArray<NSString*>* scriptFiles;
+@property (nonatomic, assign) BOOL minimized;
 @end
+
+static NSString* rbxmod_scripts_dir(void) {
+    NSString* docs = NSSearchPathForDirectoriesInDomains(
+        NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    NSString* d = [docs stringByAppendingPathComponent:@"RobloxMod/scripts"];
+    [NSFileManager.defaultManager createDirectoryAtPath:d
+        withIntermediateDirectories:YES attributes:nil error:nil];
+    return d;
+}
 
 @implementation RBXModOverlay
 - (instancetype)initWithFrame:(CGRect)f {
     if ((self = [super initWithFrame:f])) {
-        self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.82];
+        self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.86];
         self.layer.cornerRadius = 10;
-        _editor = [[UITextView alloc] initWithFrame:CGRectMake(8, 8, f.size.width-16, 180)];
+        self.layer.borderColor  = [UIColor colorWithRed:0.2 green:0.9 blue:0.3 alpha:1].CGColor;
+        self.layer.borderWidth  = 1.0;
+
+        UILabel* title = [[UILabel alloc] initWithFrame:CGRectMake(10, 4, 200, 20)];
+        title.text = @"RobloxMod"; title.textColor = UIColor.whiteColor;
+        title.font = [UIFont boldSystemFontOfSize:12];
+        [self addSubview:title];
+
+        _min = [UIButton buttonWithType:UIButtonTypeSystem];
+        _min.frame = CGRectMake(f.size.width - 30, 2, 26, 26);
+        [_min setTitle:@"–" forState:UIControlStateNormal];
+        [_min addTarget:self action:@selector(toggleMin) forControlEvents:UIControlEventTouchUpInside];
+        [self addSubview:_min];
+
+        _editor = [[UITextView alloc] initWithFrame:CGRectMake(8, 28, f.size.width-16, 170)];
         _editor.backgroundColor = [UIColor colorWithWhite:0.08 alpha:1];
-        _editor.textColor = [UIColor greenColor];
+        _editor.textColor = [UIColor colorWithRed:0.4 green:1.0 blue:0.5 alpha:1];
         _editor.font = [UIFont fontWithName:@"Menlo" size:11];
         _editor.autocorrectionType = UITextAutocorrectionTypeNo;
         _editor.autocapitalizationType = UITextAutocapitalizationTypeNone;
-        _editor.text = @"-- lua here\nprint('injected')";
+        _editor.text = @"-- getrawmetatable(game), hookfunction, request{}...\nprint(identifyexecutor())";
         [self addSubview:_editor];
 
-        _run = [UIButton buttonWithType:UIButtonTypeSystem];
-        _run.frame = CGRectMake(8, 196, 80, 32);
-        [_run setTitle:@"Execute" forState:UIControlStateNormal];
-        [_run addTarget:self action:@selector(runTapped) forControlEvents:UIControlEventTouchUpInside];
-        [self addSubview:_run];
+        _run   = [self mkBtn:@"Execute" frame:CGRectMake(8,   204, 80, 30) sel:@selector(runTapped)];
+        _save  = [self mkBtn:@"Save"    frame:CGRectMake(92,  204, 60, 30) sel:@selector(saveTapped)];
+        _clear = [self mkBtn:@"Clear"   frame:CGRectMake(156, 204, 60, 30) sel:@selector(clearTapped)];
+        _scripts = [self mkBtn:@"Scripts" frame:CGRectMake(220, 204, 80, 30) sel:@selector(scriptsTapped)];
 
-        _flySw = [[UISwitch alloc] initWithFrame:CGRectMake(100, 200, 60, 30)];
+        UILabel* flyL = [[UILabel alloc] initWithFrame:CGRectMake(8, 242, 40, 26)];
+        flyL.text = @"Fly"; flyL.textColor = UIColor.whiteColor; flyL.font = [UIFont systemFontOfSize:11];
+        [self addSubview:flyL];
+        _flySw = [[UISwitch alloc] initWithFrame:CGRectMake(44, 240, 50, 28)];
+        _flySw.transform = CGAffineTransformMakeScale(0.75, 0.75);
         [_flySw addTarget:self action:@selector(flyChanged) forControlEvents:UIControlEventValueChanged];
         [self addSubview:_flySw];
 
-        _noclipSw = [[UISwitch alloc] initWithFrame:CGRectMake(180, 200, 60, 30)];
+        UILabel* ncL = [[UILabel alloc] initWithFrame:CGRectMake(110, 242, 50, 26)];
+        ncL.text = @"Noclip"; ncL.textColor = UIColor.whiteColor; ncL.font = [UIFont systemFontOfSize:11];
+        [self addSubview:ncL];
+        _noclipSw = [[UISwitch alloc] initWithFrame:CGRectMake(158, 240, 50, 28)];
+        _noclipSw.transform = CGAffineTransformMakeScale(0.75, 0.75);
         [_noclipSw addTarget:self action:@selector(noclipChanged) forControlEvents:UIControlEventValueChanged];
         [self addSubview:_noclipSw];
 
-        _wsSlider = [[UISlider alloc] initWithFrame:CGRectMake(8, 240, f.size.width-16, 30)];
+        _wsLabel = [[UILabel alloc] initWithFrame:CGRectMake(8, 274, f.size.width-16, 18)];
+        _wsLabel.text = @"WalkSpeed: 32"; _wsLabel.textColor = UIColor.whiteColor;
+        _wsLabel.font = [UIFont systemFontOfSize:11];
+        [self addSubview:_wsLabel];
+        _wsSlider = [[UISlider alloc] initWithFrame:CGRectMake(8, 292, f.size.width-16, 26)];
         _wsSlider.minimumValue = 16; _wsSlider.maximumValue = 200; _wsSlider.value = 32;
         [_wsSlider addTarget:self action:@selector(wsChanged) forControlEvents:UIControlEventValueChanged];
         [self addSubview:_wsSlider];
+
+        _scriptList = [[UITableView alloc] initWithFrame:
+            CGRectMake(0, 28, f.size.width, f.size.height - 28) style:UITableViewStylePlain];
+        _scriptList.backgroundColor = [UIColor colorWithWhite:0.05 alpha:1];
+        _scriptList.dataSource = self; _scriptList.delegate = self;
+        _scriptList.hidden = YES;
+        [self addSubview:_scriptList];
 
         UIPanGestureRecognizer* pan = [[UIPanGestureRecognizer alloc]
             initWithTarget:self action:@selector(dragged:)];
@@ -195,14 +251,84 @@ void mod_install_fly(void)         { g_fly    = true; }
     }
     return self;
 }
+
+- (UIButton*)mkBtn:(NSString*)t frame:(CGRect)f sel:(SEL)s {
+    UIButton* b = [UIButton buttonWithType:UIButtonTypeSystem];
+    b.frame = f;
+    b.backgroundColor = [UIColor colorWithWhite:0.15 alpha:1];
+    b.layer.cornerRadius = 5;
+    [b setTitle:t forState:UIControlStateNormal];
+    b.titleLabel.font = [UIFont systemFontOfSize:12];
+    [b addTarget:self action:s forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:b];
+    return b;
+}
+
 - (void)runTapped {
     NSString* s = self.editor.text;
     const char* c = [s UTF8String];
     mod_execute_script(c, strlen(c));
 }
+- (void)saveTapped {
+    NSString* name = [NSString stringWithFormat:@"script_%ld.lua",
+        (long)[NSDate.date timeIntervalSince1970]];
+    NSString* p = [rbxmod_scripts_dir() stringByAppendingPathComponent:name];
+    [self.editor.text writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil];
+}
+- (void)clearTapped { self.editor.text = @""; }
+
+- (void)scriptsTapped {
+    if (!self.scriptList.hidden) {
+        self.scriptList.hidden = YES;
+        return;
+    }
+    self.scriptFiles = [NSMutableArray array];
+    for (NSString* it in [NSFileManager.defaultManager
+            contentsOfDirectoryAtPath:rbxmod_scripts_dir() error:nil]) {
+        if ([it hasSuffix:@".lua"] || [it hasSuffix:@".luau"] || [it hasSuffix:@".txt"])
+            [self.scriptFiles addObject:it];
+    }
+    [self.scriptList reloadData];
+    self.scriptList.hidden = NO;
+}
+
+- (NSInteger)tableView:(UITableView*)tv numberOfRowsInSection:(NSInteger)s {
+    return self.scriptFiles.count;
+}
+- (UITableViewCell*)tableView:(UITableView*)tv cellForRowAtIndexPath:(NSIndexPath*)ip {
+    UITableViewCell* c = [tv dequeueReusableCellWithIdentifier:@"c"];
+    if (!c) c = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"c"];
+    c.backgroundColor = UIColor.clearColor;
+    c.textLabel.textColor = UIColor.whiteColor;
+    c.textLabel.font = [UIFont fontWithName:@"Menlo" size:11];
+    c.textLabel.text = self.scriptFiles[ip.row];
+    return c;
+}
+- (void)tableView:(UITableView*)tv didSelectRowAtIndexPath:(NSIndexPath*)ip {
+    NSString* p = [rbxmod_scripts_dir() stringByAppendingPathComponent:self.scriptFiles[ip.row]];
+    self.editor.text = [NSString stringWithContentsOfFile:p encoding:NSUTF8StringEncoding error:nil] ?: @"";
+    self.scriptList.hidden = YES;
+}
+
+- (void)toggleMin {
+    self.minimized = !self.minimized;
+    CGRect f = self.frame;
+    if (self.minimized) {
+        f.size.height = 28;
+        [self.min setTitle:@"+" forState:UIControlStateNormal];
+    } else {
+        f.size.height = 328;
+        [self.min setTitle:@"–" forState:UIControlStateNormal];
+    }
+    [UIView animateWithDuration:0.2 animations:^{ self.frame = f; }];
+}
+
 - (void)flyChanged    { g_fly    = self.flySw.on; }
 - (void)noclipChanged { g_noclip = self.noclipSw.on; }
-- (void)wsChanged     { g_walkspeed = self.wsSlider.value; }
+- (void)wsChanged {
+    g_walkspeed = self.wsSlider.value;
+    self.wsLabel.text = [NSString stringWithFormat:@"WalkSpeed: %.0f", g_walkspeed];
+}
 - (void)dragged:(UIPanGestureRecognizer*)g {
     CGPoint t = [g translationInView:self.superview];
     self.center = CGPointMake(self.center.x + t.x, self.center.y + t.y);
@@ -223,7 +349,7 @@ static void mod_present_overlay(void) {
         }
         if (!w) return;
         RBXModOverlay* v = [[RBXModOverlay alloc]
-            initWithFrame:CGRectMake(20, 80, 340, 280)];
+            initWithFrame:CGRectMake(20, 80, 340, 328)];
         [w addSubview:v];
     });
 }
