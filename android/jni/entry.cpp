@@ -4,6 +4,7 @@
 #include <jni.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <string.h>
 #include <android/log.h>
 #include "native_shim.h"
 #include "hooks_android.h"

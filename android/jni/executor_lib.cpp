@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <dlfcn.h>
 #include <jni.h>
 #include "luau_shim.h"
