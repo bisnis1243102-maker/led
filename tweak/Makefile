@@ -5,7 +5,7 @@ INSTALL_TARGET_PROCESSES = Roblox
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = RobloxMod
-RobloxMod_FILES         = Tweak.x ../shared/hooks.mm
+RobloxMod_FILES         = Tweak.x ../shared/hooks.mm ../shared/executor_lib.mm
 RobloxMod_CFLAGS        = -fobjc-arc -Wno-deprecated-declarations -I../shared
 RobloxMod_CCFLAGS       = -std=c++17
 RobloxMod_FRAMEWORKS    = UIKit Foundation QuartzCore

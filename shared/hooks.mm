@@ -69,6 +69,9 @@ typedef int (*luaL_loadbuffer_t)(lua_State*, const char*, size_t, const char*);
 typedef int (*lua_pcall_t)(lua_State*, int, int, int);
 typedef lua_State* (*newstate_t)(void*, void*);
 
+extern "C" void executor_install(lua_State*);
+extern "C" void executor_mark_thread(lua_State*);
+
 static luaL_loadbuffer_t p_loadbuffer;
 static lua_pcall_t       p_pcall;
 static lua_State*        g_L = NULL;
@@ -78,7 +81,10 @@ static newstate_t o_newstate;
 static lua_State* h_newstate(void* a, void* b) {
     lua_State* L = o_newstate(a, b);
     pthread_mutex_lock(&g_L_mtx);
-    if (!g_L) g_L = L;
+    if (!g_L) {
+        g_L = L;
+        executor_install(L);
+    }
     pthread_mutex_unlock(&g_L_mtx);
     return L;
 }
@@ -99,6 +105,7 @@ void mod_execute_script(const char* src, size_t len) {
     lua_State* L = g_L;
     pthread_mutex_unlock(&g_L_mtx);
     if (!L || !p_loadbuffer || !p_pcall) return;
+    executor_mark_thread(L);
     if (p_loadbuffer(L, src, len, "=mod") == 0) {
         p_pcall(L, 0, 0, 0);
     }

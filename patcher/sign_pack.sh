@@ -22,6 +22,7 @@ mkdir -p "$OUT"
     -framework UIKit -framework Foundation -framework QuartzCore \
     -install_name "@executable_path/RobloxMod.dylib" \
     "$ROOT/shared/hooks.mm" \
+    "$ROOT/shared/executor_lib.mm" \
     -o "$OUT/RobloxMod.dylib"
 
 ldid "-S$ENTS" "$OUT/RobloxMod.dylib"
