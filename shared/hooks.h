@@ -33,6 +33,10 @@ extern uintptr_t g_off_global_allgcopages;
 extern uintptr_t g_off_gco_next;
 extern uintptr_t g_off_gco_tt;
 extern uintptr_t g_off_tstring_data;
+extern uintptr_t g_off_closure_isC;
+extern uintptr_t g_off_closure_nup;
+extern uintptr_t g_off_closure_l_p;
+extern uintptr_t g_off_closure_c_f;
 
 void mod_init(void* image_base);
 void mod_install_lua_bridge(void);

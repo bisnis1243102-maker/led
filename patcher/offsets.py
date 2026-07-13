@@ -38,6 +38,13 @@ STRUCT = {
     "GCO.next":                  0x00,  # generic GCObject next ptr
     "GCO.tt":                    0x08,  # type tag
     "TString.data":              0x18,  # char[] payload
+    "Closure.isC":               0x0A,  # uint8_t — 1 if C closure
+    "Closure.nupvalues":         0x0B,  # uint8_t
+    "Closure.env":               0x18,  # Table*
+    "Closure.l.p":               0x28,  # Proto* for Lua closures
+    "Closure.c.f":               0x28,  # lua_CFunction for C closures
+    "Closure.c.cont":            0x30,  # lua_Continuation
+    "Closure.c.debugname":       0x38,  # const char*
 }
 
 

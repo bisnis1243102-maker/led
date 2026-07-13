@@ -14,6 +14,11 @@ CLANG="$(xcrun --sdk iphoneos --find clang++)"
 OUT="$ROOT/build"
 mkdir -p "$OUT"
 
+if [ ! -f "$ROOT/third_party/libluau_compiler.a" ]; then
+    echo "[+] building bundled Luau compiler"
+    "$ROOT/third_party/build_luau.sh"
+fi
+
 "$CLANG" -arch arm64e -arch arm64 \
     -isysroot "$SDK" \
     -miphoneos-version-min=15.0 \
@@ -21,8 +26,13 @@ mkdir -p "$OUT"
     -dynamiclib \
     -framework UIKit -framework Foundation -framework QuartzCore \
     -install_name "@executable_path/RobloxMod.dylib" \
+    -I"$ROOT/third_party/luau/Compiler/include" \
+    -I"$ROOT/third_party/luau/Ast/include" \
+    -I"$ROOT/third_party/luau/Common/include" \
     "$ROOT/shared/hooks.mm" \
     "$ROOT/shared/executor_lib.mm" \
+    "$ROOT/third_party/luau_compile_bridge.mm" \
+    -L"$ROOT/third_party" -lluau_compiler \
     -o "$OUT/RobloxMod.dylib"
 
 ldid "-S$ENTS" "$OUT/RobloxMod.dylib"

@@ -19,6 +19,10 @@ uintptr_t g_off_global_allgcopages   = 0x40;
 uintptr_t g_off_gco_next             = 0x00;
 uintptr_t g_off_gco_tt               = 0x08;
 uintptr_t g_off_tstring_data         = 0x18;
+uintptr_t g_off_closure_isC          = 0x0A;
+uintptr_t g_off_closure_nup          = 0x0B;
+uintptr_t g_off_closure_l_p          = 0x28;
+uintptr_t g_off_closure_c_f          = 0x28;
 
 static uintptr_t g_slide = 0;
 static void* g_image = NULL;
@@ -248,8 +252,47 @@ static NSString* rbxmod_scripts_dir(void) {
         UIPanGestureRecognizer* pan = [[UIPanGestureRecognizer alloc]
             initWithTarget:self action:@selector(dragged:)];
         [self addGestureRecognizer:pan];
+
+        NSNotificationCenter* nc = NSNotificationCenter.defaultCenter;
+        [nc addObserver:self selector:@selector(kbShow:)
+                   name:UIKeyboardWillShowNotification object:nil];
+        [nc addObserver:self selector:@selector(kbHide:)
+                   name:UIKeyboardWillHideNotification object:nil];
     }
     return self;
+}
+
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)kbShow:(NSNotification*)n {
+    CGRect kb = [n.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
+    UIWindow* w = self.window;
+    if (!w) return;
+    CGRect kbInWin = [w convertRect:kb fromWindow:nil];
+    CGFloat myBottom = CGRectGetMaxY(self.frame);
+    CGFloat overlap = myBottom - kbInWin.origin.y;
+    if (overlap <= 0) return;
+    NSTimeInterval dur = [n.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+    self.tag = (NSInteger)overlap; // stash so kbHide can reverse
+    [UIView animateWithDuration:dur animations:^{
+        CGRect f = self.frame;
+        f.origin.y -= overlap + 8;
+        self.frame = f;
+    }];
+}
+
+- (void)kbHide:(NSNotification*)n {
+    if (!self.tag) return;
+    NSTimeInterval dur = [n.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+    CGFloat back = (CGFloat)self.tag + 8;
+    self.tag = 0;
+    [UIView animateWithDuration:dur animations:^{
+        CGRect f = self.frame;
+        f.origin.y += back;
+        self.frame = f;
+    }];
 }
 
 - (UIButton*)mkBtn:(NSString*)t frame:(CGRect)f sel:(SEL)s {

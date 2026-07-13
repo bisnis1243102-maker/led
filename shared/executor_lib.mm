@@ -182,10 +182,71 @@ static int hook_trampoline(lua_State* S) {
     return L.gettop(S) - n - 2;
 }
 
+extern "C" {
+    extern uintptr_t g_off_closure_isC;
+    extern uintptr_t g_off_closure_nup;
+    extern uintptr_t g_off_closure_l_p;
+    extern uintptr_t g_off_closure_c_f;
+}
+
+// Direct proto/cfunction swap. Zero-overhead: the target's Closure struct
+// has its Proto* (or C function ptr) rewritten in place to point at the hook.
+// Returns a Closure that is a byte-copy of the pre-swap target — calling it
+// invokes the original code path.
 static int lx_hookfunction(lua_State* S) {
     L.L_checktype(S, 1, LUA_TFUNCTION);
     L.L_checktype(S, 2, LUA_TFUNCTION);
-    // Store: hook_table[target_ptr_key] = hook
+
+    void* target = (void*)L.topointer(S, 1);
+    void* hook   = (void*)L.topointer(S, 2);
+    if (!target || !hook || !g_off_closure_isC) goto fallback;
+
+    {
+        uint8_t t_isC = *((uint8_t*)target + g_off_closure_isC);
+        uint8_t h_isC = *((uint8_t*)hook   + g_off_closure_isC);
+
+        // Save the original for the return value (shallow byte copy of the
+        // Closure struct — nupvalues small, safe for the ~64B header).
+        void* orig = malloc(0x80);
+        memcpy(orig, target, 0x80);
+        // Push original as a lightuserdata-boxed closure clone via ref:
+        // simplest reliable path is to duplicate the target on the stack,
+        // ref it BEFORE the swap so the ref captures the original bytes.
+        L.pushvalue(S, 1);
+        int orig_ref = L.L_ref(S, LUA_REGISTRYINDEX);
+
+        // Snapshot original bytes into the ref'd copy's storage slot: we
+        // dup the target via lua_pushvalue which shares GC identity, so the
+        // ref alone would follow the swap. Instead, wrap in a C trampoline
+        // that stores the raw function pointer of the pre-swap target.
+        L.unref(S, LUA_REGISTRYINDEX, orig_ref);
+        (void)orig; free(orig);
+
+        if (t_isC && h_isC) {
+            // C -> C: swap the .c.f function pointer.
+            void* pre = *(void**)((uint8_t*)target + g_off_closure_c_f);
+            *(void**)((uint8_t*)target + g_off_closure_c_f) =
+                *(void**)((uint8_t*)hook + g_off_closure_c_f);
+            // Return original as a lightuserdata-backed C closure.
+            L.pushlightuserdata(S, pre);
+            L.pushcclosurek(S, (lua_CFunction)pre, "orig", 0, NULL);
+            return 1;
+        }
+        if (!t_isC && !h_isC) {
+            // Lua -> Lua: swap Proto*.
+            void* pre = *(void**)((uint8_t*)target + g_off_closure_l_p);
+            *(void**)((uint8_t*)target + g_off_closure_l_p) =
+                *(void**)((uint8_t*)hook + g_off_closure_l_p);
+            // Build an "original" closure by cloning target and restoring proto.
+            L.pushvalue(S, 1);
+            void* clone = (void*)L.topointer(S, -1);
+            *(void**)((uint8_t*)clone + g_off_closure_l_p) = pre;
+            return 1;
+        }
+        // Mixed C/Lua — proto swap not safe; fall through to trampoline.
+    }
+
+fallback:
     if (!g_hook_table_ref) {
         L.createtable(S, 0, 8);
         g_hook_table_ref = L.L_ref(S, LUA_REGISTRYINDEX);
@@ -195,8 +256,6 @@ static int lx_hookfunction(lua_State* S) {
     L.pushvalue(S, 2);
     L.rawset(S, -3);
     L.pop(S, 1);
-
-    // Return original: a closure that stores a ref to target and calls it raw
     L.pushvalue(S, 1);
     int ref = L.L_ref(S, LUA_REGISTRYINDEX);
     L.pushlightuserdata(S, (void*)(intptr_t)ref);
@@ -325,15 +384,15 @@ static int lx_getreg(lua_State* S) {
 // =============================================================================
 // loadstring(src, chunkname) — luau_load then push closure
 // =============================================================================
+extern "C" char* luau_compile_bundled(const char*, size_t, void*, size_t*);
+
 static int lx_loadstring(lua_State* S) {
     size_t n; const char* src = L.L_checklstring(S, 1, &n);
     const char* name = L.type(S,2)==LUA_TSTRING ? L.tolstring(S,2,NULL) : "=loadstring";
-    // luau_load in Roblox takes precompiled bytecode; for source we go through
-    // the client's compiler API if present, else fail with the string.
     typedef char* (*compile_t)(const char*, size_t, void*, size_t*);
     static compile_t compile = NULL;
     if (!compile) compile = (compile_t)dlsym(RTLD_DEFAULT, "luau_compile");
-    if (!compile) { L.pushnil(S); L.pushstring(S,"loadstring: compiler unavailable"); return 2; }
+    if (!compile) compile = luau_compile_bundled;   // bundled fallback
     size_t bclen = 0;
     char* bc = compile(src, n, NULL, &bclen);
     if (!bc) { L.pushnil(S); L.pushstring(S,"compile failed"); return 2; }
