@@ -146,7 +146,7 @@ static jmethodID g_httpMid = NULL;
 
 static void ensure_http(JNIEnv* env) {
     if (g_httpCls) return;
-    jclass c = env->FindClass("com/byte/robloxmod/HttpBridge");
+    jclass c = env->FindClass("com/bytemod/robloxmod/HttpBridge");
     if (!c) return;
     g_httpCls = (jclass)env->NewGlobalRef(c);
     g_httpMid = env->GetStaticMethodID(g_httpCls, "request",

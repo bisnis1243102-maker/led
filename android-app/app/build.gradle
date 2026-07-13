@@ -1,11 +1,11 @@
 plugins { id 'com.android.application' }
 
 android {
-    namespace 'com.byte.robloxmod'
+    namespace 'com.bytemod.robloxmod'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.byte.robloxmod"
+        applicationId "com.bytemod.robloxmod"
         minSdk 24
         targetSdk 34
         versionCode 1

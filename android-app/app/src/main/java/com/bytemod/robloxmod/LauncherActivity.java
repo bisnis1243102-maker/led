@@ -1,7 +1,7 @@
 // The APK is primarily an Xposed module, but this Activity gives it a
 // launcher icon so the user can find it after install. Explains how to
 // patch Roblox with LSPatch and shows the module status.
-package com.byte.robloxmod;
+package com.bytemod.robloxmod;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -39,7 +39,7 @@ public class LauncherActivity extends Activity {
             "To install without root:\n" +
             "1. Install LSPatch from lsposed.org/LSPatch\n" +
             "2. Open LSPatch, pick your Roblox APK\n" +
-            "3. Add THIS module (com.byte.robloxmod) to the patch\n" +
+            "3. Add THIS module (com.bytemod.robloxmod) to the patch\n" +
             "4. Choose 'Local integrated' patch mode\n" +
             "5. Install the resulting patched APK\n\n" +
             "Overlay pops ~2s after Roblox splash. Grant\n" +

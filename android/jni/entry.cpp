@@ -50,7 +50,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
 
 // Invoked from Java when the user taps Execute in the overlay.
 extern "C" JNIEXPORT void JNICALL
-Java_com_byte_robloxmod_RobloxMod_execute(JNIEnv* env, jclass, jstring src) {
+Java_com_bytemod_robloxmod_RobloxMod_execute(JNIEnv* env, jclass, jstring src) {
     const char* c = env->GetStringUTFChars(src, NULL);
     if (c) {
         mod_execute_script(c, strlen(c));
@@ -59,14 +59,14 @@ Java_com_byte_robloxmod_RobloxMod_execute(JNIEnv* env, jclass, jstring src) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_byte_robloxmod_RobloxMod_setWalkSpeed(JNIEnv*, jclass, jfloat v) {
+Java_com_bytemod_robloxmod_RobloxMod_setWalkSpeed(JNIEnv*, jclass, jfloat v) {
     mod_set_walkspeed(v);
 }
 extern "C" JNIEXPORT void JNICALL
-Java_com_byte_robloxmod_RobloxMod_setFly(JNIEnv*, jclass, jboolean on) {
+Java_com_bytemod_robloxmod_RobloxMod_setFly(JNIEnv*, jclass, jboolean on) {
     mod_set_fly(on);
 }
 extern "C" JNIEXPORT void JNICALL
-Java_com_byte_robloxmod_RobloxMod_setNoclip(JNIEnv*, jclass, jboolean on) {
+Java_com_bytemod_robloxmod_RobloxMod_setNoclip(JNIEnv*, jclass, jboolean on) {
     mod_set_noclip(on);
 }

@@ -2,7 +2,7 @@
 // process's app_data dir and System.load()s it. Necessary because
 // System.loadLibrary("RobloxMod") looks under Roblox's own lib/, which
 // doesn't contain our .so — we live in a different APK.
-package com.byte.robloxmod;
+package com.bytemod.robloxmod;
 
 import android.content.Context;
 import java.io.File;

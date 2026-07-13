@@ -7,7 +7,7 @@
 //   setWalkSpeed(float)          — patch Humanoid walkspeed
 //   setFly(boolean)              — toggle fly
 //   setNoclip(boolean)           — toggle noclip
-package com.byte.robloxmod;
+package com.bytemod.robloxmod;
 
 import android.app.Activity;
 import android.content.Context;

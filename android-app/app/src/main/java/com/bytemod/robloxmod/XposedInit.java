@@ -1,6 +1,6 @@
 // Xposed module entry point. LSPatch / LSPosed / EdXposed all resolve this
 // class from assets/xposed_init. Hooks com.roblox.client's Application.
-package com.byte.robloxmod;
+package com.bytemod.robloxmod;
 
 import android.app.Activity;
 import android.app.Application;

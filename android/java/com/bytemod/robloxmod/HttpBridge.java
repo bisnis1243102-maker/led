@@ -1,6 +1,6 @@
 // Called by executor_lib.cpp via JNI to service Lua request({...}) calls.
 // Runs on caller thread — the JNI side is already off the UI thread.
-package com.byte.robloxmod;
+package com.bytemod.robloxmod;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
