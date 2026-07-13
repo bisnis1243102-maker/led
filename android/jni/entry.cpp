@@ -13,7 +13,7 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
 static JavaVM* g_jvm = NULL;
-JavaVM* rbxmod_jvm(void) { return g_jvm; }
+extern "C" JavaVM* rbxmod_jvm(void) { return g_jvm; }
 
 static void* init_thread(void*) {
     // Wait until Roblox has loaded its native lib. Roblox's Java layer
