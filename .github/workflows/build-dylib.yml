@@ -1,0 +1,77 @@
+name: Build RobloxMod.dylib
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - "shared/**"
+      - "third_party/**"
+      - ".github/workflows/build-dylib.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ldid
+        run: |
+          brew install ldid || true
+          ldid -v || true
+
+      - name: Cache Luau
+        uses: actions/cache@v4
+        with:
+          path: |
+            third_party/luau
+            third_party/libluau_compiler.a
+          key: luau-${{ hashFiles('third_party/build_luau.sh') }}
+
+      - name: Build bundled Luau compiler
+        run: |
+          chmod +x third_party/build_luau.sh
+          ./third_party/build_luau.sh
+
+      - name: Compile RobloxMod.dylib (arm64 + arm64e)
+        run: |
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          CLANG="$(xcrun --sdk iphoneos --find clang++)"
+          mkdir -p build
+          "$CLANG" -arch arm64 -arch arm64e \
+            -isysroot "$SDK" \
+            -miphoneos-version-min=15.0 \
+            -fobjc-arc -std=c++17 -O2 \
+            -dynamiclib \
+            -framework UIKit -framework Foundation -framework QuartzCore \
+            -framework CoreGraphics -framework Security \
+            -install_name "@executable_path/RobloxMod.dylib" \
+            -I third_party/luau/Compiler/include \
+            -I third_party/luau/Ast/include \
+            -I third_party/luau/Common/include \
+            shared/hooks.mm \
+            shared/executor_lib.mm \
+            shared/antidetect.mm \
+            shared/roblox_globals.mm \
+            shared/autoexec.mm \
+            shared/scheduler.mm \
+            shared/debug_lib.mm \
+            shared/crypt_lib.mm \
+            shared/drawing_lib.mm \
+            shared/variant_pack.mm \
+            third_party/luau_compile_bridge.mm \
+            -L third_party -lluau_compiler \
+            -o build/RobloxMod.dylib
+
+      - name: Fakesign for on-device re-sign by KSign
+        run: |
+          ldid -S entitlements.plist build/RobloxMod.dylib
+          file build/RobloxMod.dylib
+          otool -L build/RobloxMod.dylib
+
+      - name: Upload dylib artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RobloxMod-dylib
+          path: build/RobloxMod.dylib
+          if-no-files-found: error
