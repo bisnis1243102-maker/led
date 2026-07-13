@@ -26,7 +26,7 @@ jobs:
           path: |
             third_party/luau
             third_party/libluau_compiler.a
-          key: luau-${{ hashFiles('third_party/build_luau.sh') }}
+          key: luau-v2-${{ hashFiles('third_party/build_luau.sh') }}
 
       - name: Build bundled Luau compiler
         run: |

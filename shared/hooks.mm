@@ -7,6 +7,7 @@
 #include <mach-o/getsect.h>
 #include <mach/mach.h>
 #include <sys/mman.h>
+#include <libkern/OSCacheControl.h>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <string.h>
@@ -58,7 +59,7 @@ static int rbx_patch_bytes(void* dst, const void* src, size_t n) {
     memcpy(dst, src, n);
     mach_vm_protect(mach_task_self(), page, span, 0,
         VM_PROT_READ | VM_PROT_EXECUTE);
-    __builtin___clear_cache((char*)dst, (char*)dst + n);
+    sys_icache_invalidate((void*)dst, n);
     return 0;
 }
 

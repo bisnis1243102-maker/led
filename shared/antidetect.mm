@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#include <libkern/OSCacheControl.h>
 #include <dlfcn.h>
 #include "hooks.h"
 
@@ -81,7 +82,7 @@ static int patch_export(void* fn, void* target) {
     }
     memcpy(fn, stub, sizeof(stub));
     mprotect((void*)page, 0x4000, PROT_READ|PROT_EXEC);
-    __builtin___clear_cache((char*)fn, (char*)fn + sizeof(stub));
+    sys_icache_invalidate((void*)fn, sizeof(stub));
     return 0;
 }
 
