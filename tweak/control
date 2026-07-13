@@ -1,0 +1,9 @@
+Package: com.byte.robloxmod
+Name: RobloxMod
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Roblox iOS client mod — Lua executor + movement patches + overlay
+Maintainer: Byte
+Author: Byte
+Section: Tweaks
+Depends: mobilesubstrate | ellekit
