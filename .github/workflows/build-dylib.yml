@@ -65,7 +65,7 @@ jobs:
 
       - name: Fakesign for on-device re-sign by KSign
         run: |
-          ldid -S entitlements.plist build/RobloxMod.dylib
+          ldid -Sentitlements.plist build/RobloxMod.dylib
           file build/RobloxMod.dylib
           otool -L build/RobloxMod.dylib
 
