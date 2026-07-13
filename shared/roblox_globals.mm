@@ -68,11 +68,18 @@ static int rx_firetouchinterest(lua_State* S) {
     return 1;
 }
 
+struct VarArray { void* data; size_t count; };
+extern "C" void variant_array_build(lua_State*, int, int, VarArray*);
+extern "C" void variant_array_free(VarArray*);
+
 // -- firesignal(signal, ...) -------------------------------------------------
 static int rx_firesignal(lua_State* S) {
     void* sig = rbx_instance_from_ud(S, 1);
     if (!sig || !p_fire) { L.pushboolean(S, 0); return 1; }
-    p_fire(sig, NULL, L.gettop(S) - 1);
+    VarArray va;
+    variant_array_build(S, 2, L.gettop(S), &va);
+    p_fire(sig, va.data, (int)va.count);
+    variant_array_free(&va);
     L.pushboolean(S, 1);
     return 1;
 }

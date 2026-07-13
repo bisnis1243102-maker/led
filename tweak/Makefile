@@ -7,7 +7,9 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = RobloxMod
 RobloxMod_FILES         = Tweak.x ../shared/hooks.mm ../shared/executor_lib.mm \
                           ../shared/antidetect.mm ../shared/roblox_globals.mm \
-                          ../shared/autoexec.mm \
+                          ../shared/autoexec.mm ../shared/scheduler.mm \
+                          ../shared/debug_lib.mm ../shared/crypt_lib.mm \
+                          ../shared/drawing_lib.mm ../shared/variant_pack.mm \
                           ../third_party/luau_compile_bridge.mm
 RobloxMod_CFLAGS        = -fobjc-arc -Wno-deprecated-declarations -I../shared \
                           -I../third_party/luau/Compiler/include \
@@ -15,7 +17,7 @@ RobloxMod_CFLAGS        = -fobjc-arc -Wno-deprecated-declarations -I../shared \
                           -I../third_party/luau/Common/include
 RobloxMod_CCFLAGS       = -std=c++17
 RobloxMod_LDFLAGS       = -L../third_party -lluau_compiler
-RobloxMod_FRAMEWORKS    = UIKit Foundation QuartzCore
+RobloxMod_FRAMEWORKS    = UIKit Foundation QuartzCore CoreGraphics Security
 RobloxMod_PRIVATE_FRAMEWORKS =
 
 include $(THEOS_MAKE_PATH)/tweak.mk

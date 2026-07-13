@@ -52,6 +52,10 @@ STRUCT = {
     "Connection.next":           0x00,  # Connection*
     "Connection.state":          0x08,  # uint8_t enabled
     "Connection.fn":             0x10,  # closure ptr
+    "Proto.k":                   0x18,  # TValue* constants
+    "Proto.sizek":               0x60,
+    "Proto.p":                   0x20,  # Proto** inner
+    "Proto.sizep":               0x64,
 }
 
 

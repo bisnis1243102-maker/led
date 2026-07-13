@@ -34,6 +34,12 @@ uintptr_t g_off_conn_fn              = 0x10;
 extern "C" void antidetect_install(void);
 extern "C" void roblox_globals_install(lua_State*);
 extern "C" void autoexec_run(void);
+extern "C" void debug_lib_install(lua_State*);
+extern "C" void crypt_lib_install(lua_State*);
+extern "C" void drawing_lib_install(lua_State*);
+extern "C" void sched_set_main(lua_State*);
+extern "C" void sched_execute(const char*, size_t);
+extern "C" void sched_tick(void);
 
 static uintptr_t g_slide = 0;
 static void* g_image = NULL;
@@ -107,6 +113,10 @@ static lua_State* h_newstate(void* a, void* b) {
         g_L = L;
         executor_install(L);
         roblox_globals_install(L);
+        debug_lib_install(L);
+        crypt_lib_install(L);
+        drawing_lib_install(L);
+        sched_set_main(L);
         autoexec_run();
     }
     pthread_mutex_unlock(&g_L_mtx);
@@ -125,14 +135,9 @@ void mod_install_lua_bridge(void) {
 }
 
 void mod_execute_script(const char* src, size_t len) {
-    pthread_mutex_lock(&g_L_mtx);
-    lua_State* L = g_L;
-    pthread_mutex_unlock(&g_L_mtx);
-    if (!L || !p_loadbuffer || !p_pcall) return;
-    executor_mark_thread(L);
-    if (p_loadbuffer(L, src, len, "=mod") == 0) {
-        p_pcall(L, 0, 0, 0);
-    }
+    // Route through scheduler so yielding scripts (wait/task.wait/coroutines)
+    // resume on the game thread instead of deadlocking on whoever tapped Execute.
+    sched_execute(src, len);
 }
 
 // -- identity / caller-check bypass -------------------------------------------
@@ -166,6 +171,19 @@ static void h_humanoid_setstate(void* self, int state) {
 void mod_install_walkspeed_patch(void) {
     o_humanoid_setstate = (humanoid_setstate_t)rbx_slide(g_off.humanoid_setstate);
     rbx_hook_branch((void*)o_humanoid_setstate, (void*)&h_humanoid_setstate);
+}
+
+// -- TaskScheduler::step hook — drains the coroutine ready queue per frame ---
+typedef void (*step_t)(void* self);
+static step_t o_step = NULL;
+static void h_step(void* self) {
+    o_step(self);
+    sched_tick();
+}
+static void mod_install_scheduler_hook(void) {
+    if (!g_off.task_scheduler_step) return;
+    o_step = (step_t)rbx_slide(g_off.task_scheduler_step);
+    rbx_hook_branch((void*)o_step, (void*)&h_step);
 }
 void mod_install_jump_patch(void)  { /* covered by setstate hook */ }
 void mod_install_noclip(void)      { g_noclip = true; }
@@ -462,5 +480,6 @@ void mod_init(void* image_base) {
     mod_bypass_identity();
     mod_install_lua_bridge();
     mod_install_walkspeed_patch();
+    mod_install_scheduler_hook();
     mod_install_render_overlay();
 }

@@ -34,7 +34,13 @@ fi
     "$ROOT/shared/antidetect.mm" \
     "$ROOT/shared/roblox_globals.mm" \
     "$ROOT/shared/autoexec.mm" \
+    "$ROOT/shared/scheduler.mm" \
+    "$ROOT/shared/debug_lib.mm" \
+    "$ROOT/shared/crypt_lib.mm" \
+    "$ROOT/shared/drawing_lib.mm" \
+    "$ROOT/shared/variant_pack.mm" \
     "$ROOT/third_party/luau_compile_bridge.mm" \
+    -framework CoreGraphics -framework Security \
     -L"$ROOT/third_party" -lluau_compiler \
     -o "$OUT/RobloxMod.dylib"
 
