@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # Fetch and build the Luau compiler as a fat arm64/arm64e static lib for iOS.
-# Output: third_party/libluau_compiler.a — linked into RobloxMod.dylib.
-#
-# Runs once during initial repo setup and on Luau version bumps.
-# Version pinned to a known-good release; bump LUAU_TAG when Roblox rebases.
+# Builds each arch into a thin .a, then lipo -creates the fat lib.
 set -euo pipefail
 
 LUAU_TAG="${LUAU_TAG:-0.640}"
@@ -20,33 +17,41 @@ SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
 CXX="$(xcrun --sdk iphoneos --find clang++)"
 LIB="$(xcrun --sdk iphoneos --find libtool)"
 
-BUILD="$ROOT/build"
-mkdir -p "$BUILD"
+build_arch() {
+    local arch="$1"
+    local build="$ROOT/build-$arch"
+    local thin="$ROOT/libluau_compiler-$arch.a"
+    mkdir -p "$build"
 
-CXX_COMMON=(
-    -arch arm64 -arch arm64e
-    -isysroot "$SDK"
-    -miphoneos-version-min=15.0
-    -O2 -fno-rtti
-    -std=c++17
-    -I"$SRC/Compiler/include"
-    -I"$SRC/Ast/include"
-    -I"$SRC/Common/include"
-    -DLUAU_API=
-    -DLUACODE_API=
-)
+    local objs=()
+    for src in "$SRC"/Compiler/src/*.cpp "$SRC"/Ast/src/*.cpp; do
+        local obj="$build/$(basename "$src" .cpp).o"
+        echo "[+] [$arch] cc $(basename "$src")"
+        "$CXX" \
+            -arch "$arch" \
+            -isysroot "$SDK" \
+            -miphoneos-version-min=15.0 \
+            -O2 -fno-rtti -std=c++17 \
+            -I"$SRC/Compiler/include" \
+            -I"$SRC/Ast/include" \
+            -I"$SRC/Common/include" \
+            -DLUAU_API= -DLUACODE_API= \
+            -c "$src" -o "$obj"
+        objs+=("$obj")
+    done
 
-OBJS=()
-for src in \
-    "$SRC"/Compiler/src/*.cpp \
-    "$SRC"/Ast/src/*.cpp
-do
-    obj="$BUILD/$(basename "$src" .cpp).o"
-    echo "[+] cc $(basename "$src")"
-    "$CXX" "${CXX_COMMON[@]}" -c "$src" -o "$obj"
-    OBJS+=("$obj")
-done
+    echo "[+] [$arch] libtool -> $thin"
+    "$LIB" -static -o "$thin" "${objs[@]}"
+}
 
-echo "[+] libtool -> $OUT"
-"$LIB" -static -o "$OUT" "${OBJS[@]}"
-echo "[+] done. link with: -L$ROOT -lluau_compiler"
+build_arch arm64
+build_arch arm64e
+
+echo "[+] lipo -> $OUT"
+lipo -create \
+    "$ROOT/libluau_compiler-arm64.a" \
+    "$ROOT/libluau_compiler-arm64e.a" \
+    -output "$OUT"
+
+lipo -info "$OUT"
+echo "[+] done"
