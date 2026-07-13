@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#include <dlfcn.h>
 #include "hooks.h"
 
 static const struct mach_header* g_self_hdr = NULL;
@@ -22,7 +23,6 @@ static pthread_once_t            g_once = PTHREAD_ONCE_INIT;
 
 static void discover_self(void) {
     Dl_info info;
-    extern int dladdr(const void*, Dl_info*);
     if (dladdr((const void*)&discover_self, &info)) {
         g_self_hdr  = (const struct mach_header*)info.dli_fbase;
         g_self_name = info.dli_fname;
