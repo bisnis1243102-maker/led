@@ -37,13 +37,13 @@ static void apply_common(DrawObj* o, lua_State* S) {
     // TextSize / Filled off the table on top of stack.
     L.getfield(S, -1, "Visible");
     o->layer.hidden = !L.toboolean(S, -1);
-    L.pop(S, 1);
+    lua_pop(S, 1);
     L.getfield(S, -1, "Color");
     // color as {r,g,b} table
     if (L.type(S, -1) == LUA_TTABLE) {
-        L.rawgeti(S, -1, 1); double r = L.tonumberx(S,-1,NULL); L.pop(S,1);
-        L.rawgeti(S, -1, 2); double g = L.tonumberx(S,-1,NULL); L.pop(S,1);
-        L.rawgeti(S, -1, 3); double b = L.tonumberx(S,-1,NULL); L.pop(S,1);
+        L.rawgeti(S, -1, 1); double r = L.tonumberx(S,-1,NULL); lua_pop(S,1);
+        L.rawgeti(S, -1, 2); double g = L.tonumberx(S,-1,NULL); lua_pop(S,1);
+        L.rawgeti(S, -1, 3); double b = L.tonumberx(S,-1,NULL); lua_pop(S,1);
         UIColor* c = [UIColor colorWithRed:r green:g blue:b alpha:1];
         if ([o->layer isKindOfClass:CAShapeLayer.class]) {
             ((CAShapeLayer*)o->layer).strokeColor = c.CGColor;
@@ -54,7 +54,7 @@ static void apply_common(DrawObj* o, lua_State* S) {
             o->layer.backgroundColor = c.CGColor;
         }
     }
-    L.pop(S, 1);
+    lua_pop(S, 1);
 }
 
 // Drawing.new("Line" | "Circle" | "Square" | "Text" | "Quad" | "Triangle")
@@ -106,36 +106,36 @@ static int dr_new(lua_State* S) {
 static int dr_update(lua_State* S) {
     L.getfield(S, 1, "__obj");
     DrawObj* o = (DrawObj*)L.touserdata(S, -1);
-    L.pop(S, 1);
+    lua_pop(S, 1);
     if (!o) return 0;
 
     __block CGFloat fromX=0, fromY=0, toX=0, toY=0, radius=0, sizeW=0, sizeH=0, thick=1;
     __block const char* text = NULL;
     L.getfield(S, 1, "From");
     if (L.type(S,-1) == LUA_TTABLE) {
-        L.rawgeti(S,-1,1); fromX = L.tonumberx(S,-1,NULL); L.pop(S,1);
-        L.rawgeti(S,-1,2); fromY = L.tonumberx(S,-1,NULL); L.pop(S,1);
-    } L.pop(S,1);
+        L.rawgeti(S,-1,1); fromX = L.tonumberx(S,-1,NULL); lua_pop(S,1);
+        L.rawgeti(S,-1,2); fromY = L.tonumberx(S,-1,NULL); lua_pop(S,1);
+    } lua_pop(S,1);
     L.getfield(S, 1, "To");
     if (L.type(S,-1) == LUA_TTABLE) {
-        L.rawgeti(S,-1,1); toX = L.tonumberx(S,-1,NULL); L.pop(S,1);
-        L.rawgeti(S,-1,2); toY = L.tonumberx(S,-1,NULL); L.pop(S,1);
-    } L.pop(S,1);
+        L.rawgeti(S,-1,1); toX = L.tonumberx(S,-1,NULL); lua_pop(S,1);
+        L.rawgeti(S,-1,2); toY = L.tonumberx(S,-1,NULL); lua_pop(S,1);
+    } lua_pop(S,1);
     L.getfield(S, 1, "Position");
     if (L.type(S,-1) == LUA_TTABLE) {
-        L.rawgeti(S,-1,1); fromX = L.tonumberx(S,-1,NULL); L.pop(S,1);
-        L.rawgeti(S,-1,2); fromY = L.tonumberx(S,-1,NULL); L.pop(S,1);
-    } L.pop(S,1);
+        L.rawgeti(S,-1,1); fromX = L.tonumberx(S,-1,NULL); lua_pop(S,1);
+        L.rawgeti(S,-1,2); fromY = L.tonumberx(S,-1,NULL); lua_pop(S,1);
+    } lua_pop(S,1);
     L.getfield(S, 1, "Size");
     if (L.type(S,-1) == LUA_TTABLE) {
-        L.rawgeti(S,-1,1); sizeW = L.tonumberx(S,-1,NULL); L.pop(S,1);
-        L.rawgeti(S,-1,2); sizeH = L.tonumberx(S,-1,NULL); L.pop(S,1);
+        L.rawgeti(S,-1,1); sizeW = L.tonumberx(S,-1,NULL); lua_pop(S,1);
+        L.rawgeti(S,-1,2); sizeH = L.tonumberx(S,-1,NULL); lua_pop(S,1);
     } else if (L.type(S,-1) == LUA_TNUMBER) {
         sizeW = sizeH = L.tonumberx(S,-1,NULL);
-    } L.pop(S,1);
-    L.getfield(S, 1, "Radius");   radius = L.tonumberx(S,-1,NULL); L.pop(S,1);
-    L.getfield(S, 1, "Thickness"); thick = L.tonumberx(S,-1,NULL) ?: 1; L.pop(S,1);
-    L.getfield(S, 1, "Text");     text = L.tolstring(S,-1,NULL); L.pop(S,1);
+    } lua_pop(S,1);
+    L.getfield(S, 1, "Radius");   radius = L.tonumberx(S,-1,NULL); lua_pop(S,1);
+    L.getfield(S, 1, "Thickness"); thick = L.tonumberx(S,-1,NULL) ?: 1; lua_pop(S,1);
+    L.getfield(S, 1, "Text");     text = L.tolstring(S,-1,NULL); lua_pop(S,1);
     NSString* nsText = text ? [NSString stringWithUTF8String:text] : nil;
 
     int kind = o->kind;
@@ -168,7 +168,7 @@ static int dr_update(lua_State* S) {
     // read Color/Visible via apply_common
     L.pushvalue(S, 1);
     apply_common(o, S);
-    L.pop(S, 1);
+    lua_pop(S, 1);
     return 0;
 }
 
@@ -176,7 +176,7 @@ static int dr_update(lua_State* S) {
 static int dr_remove(lua_State* S) {
     L.getfield(S, 1, "__obj");
     DrawObj* o = (DrawObj*)L.touserdata(S, -1);
-    L.pop(S, 1);
+    lua_pop(S, 1);
     if (!o) return 0;
     dispatch_async(dispatch_get_main_queue(), ^{
         [o->layer removeFromSuperlayer];

@@ -53,7 +53,7 @@ extern "C" void sched_execute(const char* src, size_t len) {
     lua_State* co = L.newthread(g_main);
     if (L.loadbufferx(co, bc, bclen, "=exec", NULL) != 0) {
         free(bc);
-        L.pop(g_main, 1);
+        lua_pop(g_main, 1);
         return;
     }
     free(bc);
@@ -65,7 +65,7 @@ extern "C" void sched_execute(const char* src, size_t len) {
     // via the registry ref set below.
     L.pushvalue(g_main, -1);
     L.L_ref(g_main, LUA_REGISTRYINDEX);
-    L.pop(g_main, 1);
+    lua_pop(g_main, 1);
 }
 
 // Called from the TaskScheduler::step hook once per frame.

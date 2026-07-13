@@ -133,7 +133,7 @@ extern "C" void debug_lib_install(lua_State* S) {
     // Inject into the existing debug table.
     lua_getglobal(S, "debug");
     if (L.type(S, -1) != LUA_TTABLE) {
-        L.pop(S, 1);
+        lua_pop(S, 1);
         L.createtable(S, 0, 8);
         L.pushvalue(S, -1);
         lua_setglobal(S, "debug");
@@ -142,5 +142,5 @@ extern "C" void debug_lib_install(lua_State* S) {
         L.pushcclosurek(S, r->fn, r->name, 0, NULL);
         L.setfield(S, -2, r->name);
     }
-    L.pop(S, 1);
+    lua_pop(S, 1);
 }

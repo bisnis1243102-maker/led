@@ -255,7 +255,7 @@ fallback:
     L.pushlightuserdata(S, (void*)L.topointer(S, 1));
     L.pushvalue(S, 2);
     L.rawset(S, -3);
-    L.pop(S, 1);
+    lua_pop(S, 1);
     L.pushvalue(S, 1);
     int ref = L.L_ref(S, LUA_REGISTRYINDEX);
     L.pushlightuserdata(S, (void*)(intptr_t)ref);
@@ -354,7 +354,7 @@ static int lx_getgc(lua_State* S) {
             L.pushvalue(S, -1);
             L.rawseti(S, out, n++);
         }
-        L.pop(S, 1);
+        lua_pop(S, 1);
     }
     return 1;
 }
@@ -363,7 +363,7 @@ static int lx_getgc(lua_State* S) {
 static int lx_getgenv(lua_State* S) {
     L.getfield(S, LUA_REGISTRYINDEX, "__rbxmod_genv");
     if (L.type(S, -1) == LUA_TNIL) {
-        L.pop(S, 1);
+        lua_pop(S, 1);
         L.createtable(S, 0, 16);
         L.pushvalue(S, -1);
         L.setfield(S, LUA_REGISTRYINDEX, "__rbxmod_genv");
@@ -410,10 +410,10 @@ static int lx_http_request(lua_State* S) {
     L.getfield(S, 1, "Url");
     const char* url = L.tolstring(S, -1, NULL);
     if (!url) url = "";
-    L.pop(S, 1);
+    lua_pop(S, 1);
     L.getfield(S, 1, "Method");
     const char* method = L.type(S,-1)==LUA_TSTRING ? L.tolstring(S,-1,NULL) : "GET";
-    L.pop(S, 1);
+    lua_pop(S, 1);
     L.getfield(S, 1, "Body");
     size_t blen = 0;
     const char* body = L.type(S,-1)==LUA_TSTRING ? L.tolstring(S,-1,&blen) : NULL;
@@ -422,7 +422,7 @@ static int lx_http_request(lua_State* S) {
         [NSURL URLWithString:[NSString stringWithUTF8String:url]]];
     req.HTTPMethod = [NSString stringWithUTF8String:method];
     if (body) req.HTTPBody = [NSData dataWithBytes:body length:blen];
-    L.pop(S, 1);
+    lua_pop(S, 1);
 
     L.getfield(S, 1, "Headers");
     if (L.type(S, -1) == LUA_TTABLE) {
@@ -432,10 +432,10 @@ static int lx_http_request(lua_State* S) {
             const char* v = L.tolstring(S, -1, NULL);
             if (k && v) [req setValue:[NSString stringWithUTF8String:v]
                             forHTTPHeaderField:[NSString stringWithUTF8String:k]];
-            L.pop(S, 1);
+            lua_pop(S, 1);
         }
     }
-    L.pop(S, 1);
+    lua_pop(S, 1);
 
     __block NSData* respBody = nil;
     __block NSHTTPURLResponse* resp = nil;
