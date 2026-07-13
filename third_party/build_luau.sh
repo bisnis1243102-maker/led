@@ -27,7 +27,7 @@ CXX_COMMON=(
     -arch arm64 -arch arm64e
     -isysroot "$SDK"
     -miphoneos-version-min=15.0
-    -O2 -fno-exceptions -fno-rtti
+    -O2 -fno-rtti
     -std=c++17
     -I"$SRC/Compiler/include"
     -I"$SRC/Ast/include"
