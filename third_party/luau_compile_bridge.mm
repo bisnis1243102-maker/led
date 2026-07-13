@@ -5,21 +5,7 @@
 #include <string.h>
 #include <string>
 
-// Forward decls from Luau's Compiler.h so we don't drag the header into every TU.
-namespace Luau {
-    struct CompileOptions {
-        int optimizationLevel = 1;
-        int debugLevel = 1;
-        int typeInfoLevel = 0;
-        int coverageLevel = 0;
-        const char* vectorLib = nullptr;
-        const char* vectorCtor = nullptr;
-        const char* vectorType = nullptr;
-        const char* const* mutableGlobals = nullptr;
-        const char* const* userdataTypes = nullptr;
-    };
-    std::string compile(const std::string& src, const CompileOptions& opts = {});
-}
+#include "Luau/Compiler.h"
 
 extern "C" char* luau_compile_bundled(const char* src, size_t srclen,
                                       void* /*opts*/, size_t* outlen) {
