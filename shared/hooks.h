@@ -37,6 +37,17 @@ extern uintptr_t g_off_closure_isC;
 extern uintptr_t g_off_closure_nup;
 extern uintptr_t g_off_closure_l_p;
 extern uintptr_t g_off_closure_c_f;
+extern uintptr_t g_off_instance_children;
+extern uintptr_t g_off_instance_parent;
+extern uintptr_t g_off_instance_classname;
+extern uintptr_t g_off_signal_head;
+extern uintptr_t g_off_conn_next;
+extern uintptr_t g_off_conn_state;
+extern uintptr_t g_off_conn_fn;
+
+void mod_install_antidetect(void);
+void mod_install_roblox_globals(lua_State*);
+void autoexec_run(void);
 
 void mod_init(void* image_base);
 void mod_install_lua_bridge(void);

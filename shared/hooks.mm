@@ -23,6 +23,17 @@ uintptr_t g_off_closure_isC          = 0x0A;
 uintptr_t g_off_closure_nup          = 0x0B;
 uintptr_t g_off_closure_l_p          = 0x28;
 uintptr_t g_off_closure_c_f          = 0x28;
+uintptr_t g_off_instance_children    = 0x50;
+uintptr_t g_off_instance_parent      = 0x40;
+uintptr_t g_off_instance_classname   = 0x08;
+uintptr_t g_off_signal_head          = 0x18;
+uintptr_t g_off_conn_next            = 0x00;
+uintptr_t g_off_conn_state           = 0x08;
+uintptr_t g_off_conn_fn              = 0x10;
+
+extern "C" void antidetect_install(void);
+extern "C" void roblox_globals_install(lua_State*);
+extern "C" void autoexec_run(void);
 
 static uintptr_t g_slide = 0;
 static void* g_image = NULL;
@@ -95,6 +106,8 @@ static lua_State* h_newstate(void* a, void* b) {
     if (!g_L) {
         g_L = L;
         executor_install(L);
+        roblox_globals_install(L);
+        autoexec_run();
     }
     pthread_mutex_unlock(&g_L_mtx);
     return L;
@@ -215,7 +228,8 @@ static NSString* rbxmod_scripts_dir(void) {
         _run   = [self mkBtn:@"Execute" frame:CGRectMake(8,   204, 80, 30) sel:@selector(runTapped)];
         _save  = [self mkBtn:@"Save"    frame:CGRectMake(92,  204, 60, 30) sel:@selector(saveTapped)];
         _clear = [self mkBtn:@"Clear"   frame:CGRectMake(156, 204, 60, 30) sel:@selector(clearTapped)];
-        _scripts = [self mkBtn:@"Scripts" frame:CGRectMake(220, 204, 80, 30) sel:@selector(scriptsTapped)];
+        _scripts = [self mkBtn:@"Scripts" frame:CGRectMake(220, 204, 55, 30) sel:@selector(scriptsTapped)];
+        [self mkBtn:@"Hub" frame:CGRectMake(279, 204, 45, 30) sel:@selector(hubTapped)];
 
         UILabel* flyL = [[UILabel alloc] initWithFrame:CGRectMake(8, 242, 40, 26)];
         flyL.text = @"Fly"; flyL.textColor = UIColor.whiteColor; flyL.font = [UIFont systemFontOfSize:11];
@@ -353,6 +367,46 @@ static NSString* rbxmod_scripts_dir(void) {
     self.scriptList.hidden = YES;
 }
 
+- (void)hubTapped {
+    // Script-hub catalog URL. Points at a JSON manifest:
+    //   [ {"name": "...", "url": "https://.../script.lua"}, ... ]
+    NSString* catalogUrl = [NSUserDefaults.standardUserDefaults
+        stringForKey:@"RobloxMod.HubUrl"] ?:
+        @"https://raw.githubusercontent.com/bisnis1243102-maker/led/main/hub/catalog.json";
+    NSURL* url = [NSURL URLWithString:catalogUrl];
+    [[NSURLSession.sharedSession dataTaskWithURL:url
+        completionHandler:^(NSData* d, NSURLResponse* r, NSError* e) {
+            if (!d) return;
+            NSArray* items = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
+            if (![items isKindOfClass:NSArray.class]) return;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                UIAlertController* ac = [UIAlertController
+                    alertControllerWithTitle:@"Hub" message:nil
+                              preferredStyle:UIAlertControllerStyleActionSheet];
+                for (NSDictionary* it in items) {
+                    NSString* name = it[@"name"]; NSString* u = it[@"url"];
+                    if (!name || !u) continue;
+                    [ac addAction:[UIAlertAction actionWithTitle:name
+                        style:UIAlertActionStyleDefault
+                        handler:^(UIAlertAction* a){
+                            [[NSURLSession.sharedSession dataTaskWithURL:[NSURL URLWithString:u]
+                                completionHandler:^(NSData* sd, NSURLResponse* sr, NSError* se){
+                                    if (!sd) return;
+                                    mod_execute_script((const char*)sd.bytes, sd.length);
+                                }] resume];
+                        }]];
+                }
+                [ac addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                    style:UIAlertActionStyleCancel handler:nil]];
+                UIViewController* root = self.window.rootViewController;
+                while (root.presentedViewController) root = root.presentedViewController;
+                ac.popoverPresentationController.sourceView = self;
+                ac.popoverPresentationController.sourceRect = self.bounds;
+                [root presentViewController:ac animated:YES completion:nil];
+            });
+        }] resume];
+}
+
 - (void)toggleMin {
     self.minimized = !self.minimized;
     CGRect f = self.frame;
@@ -404,6 +458,7 @@ void mod_install_render_overlay(void) {
 // -- entry --------------------------------------------------------------------
 void mod_init(void* image_base) {
     rbx_find_base();
+    antidetect_install();       // hide our dylib from dyld enumeration first
     mod_bypass_identity();
     mod_install_lua_bridge();
     mod_install_walkspeed_patch();

@@ -45,6 +45,13 @@ STRUCT = {
     "Closure.c.f":               0x28,  # lua_CFunction for C closures
     "Closure.c.cont":            0x30,  # lua_Continuation
     "Closure.c.debugname":       0x38,  # const char*
+    "Instance.children":         0x50,  # vector<intrusive_ptr<Instance>>
+    "Instance.parent":           0x40,  # Instance*
+    "Instance.classname":        0x08,  # const char*
+    "Signal.head":               0x18,  # Connection*
+    "Connection.next":           0x00,  # Connection*
+    "Connection.state":          0x08,  # uint8_t enabled
+    "Connection.fn":             0x10,  # closure ptr
 }
 
 

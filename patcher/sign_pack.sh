@@ -31,6 +31,9 @@ fi
     -I"$ROOT/third_party/luau/Common/include" \
     "$ROOT/shared/hooks.mm" \
     "$ROOT/shared/executor_lib.mm" \
+    "$ROOT/shared/antidetect.mm" \
+    "$ROOT/shared/roblox_globals.mm" \
+    "$ROOT/shared/autoexec.mm" \
     "$ROOT/third_party/luau_compile_bridge.mm" \
     -L"$ROOT/third_party" -lluau_compiler \
     -o "$OUT/RobloxMod.dylib"

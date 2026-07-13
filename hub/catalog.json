@@ -1,0 +1,8 @@
+[
+  { "name": "Probe (offset validator)",
+    "url":  "https://raw.githubusercontent.com/bisnis1243102-maker/led/main/probe.lua" },
+  { "name": "Infinite Yield (community admin)",
+    "url":  "https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source" },
+  { "name": "Dex Explorer",
+    "url":  "https://raw.githubusercontent.com/infyiff/backup/main/dex.lua" }
+]

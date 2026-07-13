@@ -6,6 +6,8 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = RobloxMod
 RobloxMod_FILES         = Tweak.x ../shared/hooks.mm ../shared/executor_lib.mm \
+                          ../shared/antidetect.mm ../shared/roblox_globals.mm \
+                          ../shared/autoexec.mm \
                           ../third_party/luau_compile_bridge.mm
 RobloxMod_CFLAGS        = -fobjc-arc -Wno-deprecated-declarations -I../shared \
                           -I../third_party/luau/Compiler/include \
