@@ -10,7 +10,23 @@ Every push triggers `.github/workflows/build-android.yml`, which builds
 using NDK r26d. Grab from repo → Actions → latest "Build RobloxMod (Android)"
 run → Artifacts → `RobloxMod-android`.
 
-## Path A — non-root (repacked APK, most users)
+## Path A — non-root (LSPatch, easiest, recommended)
+
+1. Grab the module APK from the "Build RobloxMod (LSPatch module APK)"
+   workflow → Artifacts → `RobloxMod-module-apk`. Install it. Its icon
+   shows on your launcher.
+2. Grab a Roblox APK from APKPure/APKMirror.
+3. Install **LSPatch** (`github.com/JingMatrix/LSPatch/releases`).
+4. Open LSPatch → New Patch → pick your Roblox APK.
+5. Add the RobloxMod module to the patch list.
+6. Choose "Local integrated" patch mode. Install.
+7. Uninstall Play Store Roblox → open the patched Roblox → grant
+   "Draw over other apps" → overlay appears ~2s after splash.
+
+No smali edits, no MT Manager. LSPatch handles the Xposed injection
+non-invasively at Application.attach.
+
+## Path B — non-root (manual repack with MT Manager)
 
 1. Get a Roblox APK (`com.roblox.client`) — grab a specific version from
    APKPure / APKMirror. Same version as your Google Play install ideally
@@ -35,15 +51,13 @@ run → Artifacts → `RobloxMod-android`.
 7. Uninstall your Google Play Roblox → install the modded APK → grant
    the "Draw over other apps" permission when prompted.
 
-## Path B — rooted (LSPosed module, cleanest for developers)
+## Path C — rooted (LSPosed module, cleanest for developers)
 
 1. Root your device with Magisk. Install LSPosed via Magisk module.
-2. Wrap the artifact into an LSPosed module APK (structure in
-   `android/lsposed/` — TODO for a later commit).
-3. Install the module APK, enable it in LSPosed, target
-   `com.roblox.client`, force-stop and relaunch Roblox.
-4. LSPosed injects the module before the app's own code runs — no APK
-   repack needed.
+2. Install the same `RobloxMod-module-apk` from Path A.
+3. Open LSPosed manager → Modules → enable RobloxMod → scope already
+   preconfigured to `com.roblox.client`.
+4. Force-stop and relaunch Roblox — module attaches automatically.
 
 ## First launch checklist
 

@@ -1,0 +1,61 @@
+name: Build RobloxMod (LSPatch module APK)
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - "android-app/**"
+      - "android/**"
+      - ".github/workflows/build-android-app.yml"
+      - ".github/workflows/build-android.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Luau
+        uses: actions/cache@v4
+        with:
+          path: android/third_party/luau
+          key: android-luau-0.640
+
+      - name: Build native .so
+        env:
+          ANDROID_NDK: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          chmod +x android/build.sh
+          android/build.sh
+          # Copy .so into the module APK's jniLibs so Gradle bundles it.
+          for abi in arm64-v8a armeabi-v7a; do
+            mkdir -p android-app/app/src/main/jniLibs/$abi
+            cp android/out/$abi/libRobloxMod.so android-app/app/src/main/jniLibs/$abi/
+          done
+
+      - name: Assemble APK
+        run: |
+          cd android-app
+          # Gradle wrapper — generate on the fly since we don't ship it in-tree.
+          gradle wrapper --gradle-version=8.9
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RobloxMod-module-apk
+          path: android-app/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
